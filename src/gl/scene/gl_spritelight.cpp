@@ -67,15 +67,6 @@ void gl_SetDynSpriteLight(AActor *self, float x, float y, float z, subsector_t *
 	float frac, lr, lg, lb;
 	float radius;
 	float out[3] = { 0.0f, 0.0f, 0.0f };
-	
-	// Fake sunlight
-	float sunlightintensity = subsec->sector->lightlevel / 255.0f * gl_sunlight_str;
-	float sunlightred = sunlightintensity * gl_sunlight_r;
-	float sunlightgreen = sunlightintensity * gl_sunlight_g;
-	float sunlightblue = sunlightintensity * gl_sunlight_b;
-	out[0] += sunlightred * 0.5f;
-	out[1] += sunlightgreen * 0.5f;
-	out[2] += sunlightblue * 0.5f;
 
 	// Go through both light lists
 	FLightNode * node = subsec->lighthead;
