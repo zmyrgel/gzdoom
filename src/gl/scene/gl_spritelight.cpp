@@ -47,6 +47,14 @@
 FDynLightData modellightdata;
 int modellightindex = -1;
 
+CVAR(Float, gl_sunlight_x, 1.5, 0);
+CVAR(Float, gl_sunlight_y, 1.5, 0);
+CVAR(Float, gl_sunlight_z, 2.0, 0);
+CVAR(Float, gl_sunlight_str, 0.5, 0);
+CVAR(Float, gl_sunlight_r, 1, 0);
+CVAR(Float, gl_sunlight_g, 0.95f, 0);
+CVAR(Float, gl_sunlight_b, 0.9, 0);
+
 //==========================================================================
 //
 // Sets a single light value from all dynamic lights affecting the specified location
@@ -132,12 +140,69 @@ void gl_SetDynSpriteLight(AActor *thing, particle_t *particle)
 	}
 }
 
+void gl_AddFakeSunLight(subsector_t * subsec, FDynLightData &ldata, bool hudmodel)
+{
+	// Fake contrast/sun light test
+	FVector3 sunlightpos;
+	sunlightpos.X = gl_sunlight_x * 10000.0;
+	sunlightpos.Y = gl_sunlight_y * 10000.0;
+	sunlightpos.Z = gl_sunlight_z * 10000.0;
+	if (!hudmodel)
+	{
+		sunlightpos.X = (float)(sunlightpos.X + r_viewpoint.Pos.X);
+		sunlightpos.Y = (float)(sunlightpos.Y + r_viewpoint.Pos.Y);
+		sunlightpos.Z = (float)(sunlightpos.Z + r_viewpoint.Pos.Z);
+	}
+	else
+	{
+		DVector3 rotation;
+		DVector3 localpos((double)sunlightpos.X, (double)sunlightpos.Y, (double)sunlightpos.Z);
+
+		rotation.X = localpos.X * r_viewpoint.Angles.Yaw.Sin() - localpos.Y * r_viewpoint.Angles.Yaw.Cos();
+		rotation.Y = localpos.X * r_viewpoint.Angles.Yaw.Cos() + localpos.Y * r_viewpoint.Angles.Yaw.Sin();
+		rotation.Z = localpos.Z;
+		localpos = rotation;
+
+		rotation.X = localpos.X;
+		rotation.Y = localpos.Y * r_viewpoint.Angles.Pitch.Sin() - localpos.Z * r_viewpoint.Angles.Pitch.Cos();
+		rotation.Z = localpos.Y * r_viewpoint.Angles.Pitch.Cos() + localpos.Z * r_viewpoint.Angles.Pitch.Sin();
+		localpos = rotation;
+
+		rotation.Y = localpos.Y;
+		rotation.Z = localpos.Z * r_viewpoint.Angles.Roll.Sin() - localpos.X * r_viewpoint.Angles.Roll.Cos();
+		rotation.X = localpos.Z * r_viewpoint.Angles.Roll.Cos() + localpos.X * r_viewpoint.Angles.Roll.Sin();
+		localpos = rotation;
+
+		sunlightpos.X = localpos.X;
+		sunlightpos.Y = localpos.Y;
+		sunlightpos.Z = localpos.Z;
+	}
+	float sunlightradius = 100000.0;
+	float sunlightintensity = subsec->sector->lightlevel / 255.0f * gl_sunlight_str;
+	float sunlightred = sunlightintensity * gl_sunlight_r;
+	float sunlightgreen = sunlightintensity * gl_sunlight_g;
+	float sunlightblue = sunlightintensity * gl_sunlight_b;
+	float sunlightshadowIndex = GLRenderer->mShadowMap.ShadowMapIndex(nullptr) + 1.0f;
+	sunlightshadowIndex = -sunlightshadowIndex;
+	float *data = &modellightdata.arrays[0][modellightdata.arrays[0].Reserve(8)];
+	data[0] = sunlightpos.X;
+	data[1] = sunlightpos.Z;
+	data[2] = sunlightpos.Y;
+	data[3] = sunlightradius;
+	data[4] = sunlightred;
+	data[5] = sunlightgreen;
+	data[6] = sunlightblue;
+	data[7] = sunlightshadowIndex;
+}
+
 void gl_SetDynModelLight(AActor *self, float x, float y, float z, subsector_t * subsec, bool hudmodel)
 {
 	Plane p;
 	p.Set(subsec->sector->ceilingplane); // Is this correct?
 
 	modellightdata.Clear();
+
+	gl_AddFakeSunLight(subsec, modellightdata, hudmodel);
 
 	// Go through both light lists
 	FLightNode * node = subsec->lighthead;

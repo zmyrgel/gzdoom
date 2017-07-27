@@ -42,6 +42,7 @@
 #include "gl/scene/gl_drawinfo.h"
 #include "gl/scene/gl_portal.h"
 #include "gl/scene/gl_scenedrawer.h"
+#include "gl/scene/gl_wall.h"
 #include "gl/shaders/gl_shader.h"
 #include "gl/textures/gl_material.h"
 #include "gl/utility/gl_clock.h"
@@ -76,6 +77,8 @@ void GLWall::SetupLights()
 
 	lightdata.Clear();
 	p.Set(&glseg);
+
+	gl_AddFakeSunLight(sub, lightdata);
 
 	/*
 	if (!p.ValidNormal()) 

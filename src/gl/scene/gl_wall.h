@@ -420,8 +420,11 @@ inline float Dist2(float x1,float y1,float x2,float y2)
 
 // Light + color
 
+struct FDynLightData;
+
 void gl_SetDynSpriteLight(AActor *self, float x, float y, float z, subsector_t *subsec);
 void gl_SetDynSpriteLight(AActor *actor, particle_t *particle);
 void gl_SetDynModelLight(AActor *self, float x, float y, float z, subsector_t * subsec, bool hudmodel = false);
+void gl_AddFakeSunLight(subsector_t * subsec, FDynLightData &ldata, bool hudmodel = false);
 
 #endif

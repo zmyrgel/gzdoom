@@ -51,6 +51,7 @@
 #include "gl/scene/gl_drawinfo.h"
 #include "gl/shaders/gl_shader.h"
 #include "gl/scene/gl_scenedrawer.h"
+#include "gl/scene/gl_wall.h"
 #include "gl/textures/gl_material.h"
 #include "gl/utility/gl_clock.h"
 #include "gl/utility/gl_convert.h"
@@ -122,6 +123,9 @@ void GLFlat::SetupSubsectorLights(int pass, subsector_t * sub, int *dli)
 	}
 
 	lightdata.Clear();
+
+	gl_AddFakeSunLight(sub, lightdata);
+
 	FLightNode * node = sub->lighthead;
 	while (node)
 	{
