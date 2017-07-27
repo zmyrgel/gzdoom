@@ -184,7 +184,7 @@ void gl_AddFakeSunLight(subsector_t * subsec, FDynLightData &ldata, bool hudmode
 	float sunlightblue = sunlightintensity * gl_sunlight_b;
 	float sunlightshadowIndex = GLRenderer->mShadowMap.ShadowMapIndex(nullptr) + 1.0f;
 	sunlightshadowIndex = -sunlightshadowIndex;
-	float *data = &modellightdata.arrays[0][modellightdata.arrays[0].Reserve(8)];
+	float *data = &ldata.arrays[0][ldata.arrays[0].Reserve(8)];
 	data[0] = sunlightpos.X;
 	data[1] = sunlightpos.Z;
 	data[2] = sunlightpos.Y;
