@@ -2473,6 +2473,49 @@ DEFINE_ACTION_FUNCTION(_Secplane, PointToDist)
 	ACTION_RETURN_FLOAT(self->PointToDist(DVector2(x, y), z));
 }
 
+DEFINE_ACTION_FUNCTION(_Sector, SetSunColor)
+{
+	PARAM_SELF_STRUCT_PROLOGUE(sector_t);
+	PARAM_COLOR(o);
+	self->SunColor = o;
+	return 0;
+}
+
+DEFINE_ACTION_FUNCTION(_Sector, GetSunColor)
+{
+	PARAM_SELF_STRUCT_PROLOGUE(sector_t);
+	ACTION_RETURN_INT(self->SunColor);
+}
+
+DEFINE_ACTION_FUNCTION(_Sector, SetSunStrength)
+{
+	PARAM_SELF_STRUCT_PROLOGUE(sector_t);
+	PARAM_FLOAT(str);
+	self->SunStrength = str;
+	return 0;
+}
+
+DEFINE_ACTION_FUNCTION(_Sector, GetSunStrength)
+{
+	PARAM_SELF_STRUCT_PROLOGUE(sector_t);
+	ACTION_RETURN_FLOAT(self->SunStrength);
+}
+
+DEFINE_ACTION_FUNCTION(_Sector, SetSunPosition)
+{
+	PARAM_SELF_STRUCT_PROLOGUE(sector_t);
+	PARAM_FLOAT(x);
+	PARAM_FLOAT(y);
+	PARAM_FLOAT(z);
+	self->SunPosition = DVector3(x, y, z);
+	return 0;
+}
+
+DEFINE_ACTION_FUNCTION(_Sector, GetSunPosition)
+{
+	PARAM_SELF_STRUCT_PROLOGUE(sector_t);
+	ACTION_RETURN_VEC3(self->SunPosition);
+}
 
 DEFINE_FIELD_X(Sector, sector_t, floorplane)
 DEFINE_FIELD_X(Sector, sector_t, ceilingplane)

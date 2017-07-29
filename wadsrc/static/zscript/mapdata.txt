@@ -352,6 +352,13 @@ struct Sector native play
 	native double, Sector LowestFloorAt(Vector2 a);
 	native double, double GetFriction(int plane);
 
+	native Vector3 GetSunPosition();
+	native void SetSunPosition(Vector3 pos);
+	native double GetSunStrength();
+	native viod SetSunStrength(double strength);
+	native color GetSunColor();
+	native void SetSunColor(color c);
+
 	native void SetXOffset(int pos, double o);
 	native void AddXOffset(int pos, double o);
 	native double GetXOffset(int pos);
