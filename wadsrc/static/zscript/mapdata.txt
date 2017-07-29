@@ -355,7 +355,7 @@ struct Sector native play
 	native Vector3 GetSunPosition();
 	native void SetSunPosition(Vector3 pos);
 	native double GetSunStrength();
-	native viod SetSunStrength(double strength);
+	native void SetSunStrength(double strength);
 	native color GetSunColor();
 	native void SetSunColor(color c);
 
