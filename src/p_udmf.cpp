@@ -1398,6 +1398,9 @@ public:
 		sec->friction = ORIG_FRICTION;
 		sec->movefactor = ORIG_FRICTION_FACTOR;
 
+		sec->SunPosition = DVector3(1.0f, 1.0f, 2.0f);
+		sec->SunColor = 0xffffffff;
+
 		sc.MustGetToken('{');
 		while (!sc.CheckToken('}'))
 		{
@@ -1422,6 +1425,26 @@ public:
 
 			case NAME_Lightlevel:
 				sec->lightlevel = sector_t::ClampLight(CheckInt(key));
+				continue;
+
+			case NAME_Suncolor:
+				sec->SunColor = CheckInt(key);
+				continue;
+
+			case NAME_Sun_x:
+				sec->SunPosition.X = CheckCoordinate(key);
+				continue;
+
+			case NAME_Sun_y:
+				sec->SunPosition.Y = CheckCoordinate(key);
+				continue;
+
+			case NAME_Sun_z:
+				sec->SunPosition.Z = CheckCoordinate(key);
+				continue;
+
+			case NAME_Sunstrength:
+				sec->SunStrength = CheckFloat(key);
 				continue;
 
 			case NAME_Special:

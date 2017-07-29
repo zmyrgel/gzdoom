@@ -47,14 +47,6 @@
 FDynLightData modellightdata;
 int modellightindex = -1;
 
-CVAR(Float, gl_sunlight_x, 1.5, 0);
-CVAR(Float, gl_sunlight_y, 1.5, 0);
-CVAR(Float, gl_sunlight_z, 2.0, 0);
-CVAR(Float, gl_sunlight_str, 0.5, 0);
-CVAR(Float, gl_sunlight_r, 1, 0);
-CVAR(Float, gl_sunlight_g, 0.95f, 0);
-CVAR(Float, gl_sunlight_b, 0.9, 0);
-
 //==========================================================================
 //
 // Sets a single light value from all dynamic lights affecting the specified location
@@ -144,9 +136,9 @@ void gl_AddFakeSunLight(subsector_t * subsec, FDynLightData &ldata, bool hudmode
 {
 	// Fake contrast/sun light test
 	FVector3 sunlightpos;
-	sunlightpos.X = gl_sunlight_x * 10000.0;
-	sunlightpos.Y = gl_sunlight_y * 10000.0;
-	sunlightpos.Z = gl_sunlight_z * 10000.0;
+	sunlightpos.X = subsec->sector->SunPosition.X * 10000.0;
+	sunlightpos.Y = subsec->sector->SunPosition.Y * 10000.0;
+	sunlightpos.Z = subsec->sector->SunPosition.Z * 10000.0;
 	if (!hudmodel)
 	{
 		sunlightpos.X = (float)(sunlightpos.X + r_viewpoint.Pos.X);
@@ -178,10 +170,10 @@ void gl_AddFakeSunLight(subsector_t * subsec, FDynLightData &ldata, bool hudmode
 		sunlightpos.Z = localpos.Z;
 	}
 	float sunlightradius = 100000.0;
-	float sunlightintensity = subsec->sector->lightlevel / 255.0f * gl_sunlight_str;
-	float sunlightred = sunlightintensity * gl_sunlight_r;
-	float sunlightgreen = sunlightintensity * gl_sunlight_g;
-	float sunlightblue = sunlightintensity * gl_sunlight_b;
+	float sunlightintensity = subsec->sector->lightlevel / 255.0f * subsec->sector->SunStrength;
+	float sunlightred = sunlightintensity * subsec->sector->SunColor.r / 255.0f;
+	float sunlightgreen = sunlightintensity * subsec->sector->SunColor.g / 255.0f;
+	float sunlightblue = sunlightintensity * subsec->sector->SunColor.b / 255.0f;
 	float sunlightshadowIndex = GLRenderer->mShadowMap.ShadowMapIndex(nullptr) + 1.0f;
 	sunlightshadowIndex = -sunlightshadowIndex;
 	float *data = &ldata.arrays[0][ldata.arrays[0].Reserve(8)];

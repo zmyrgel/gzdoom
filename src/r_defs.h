@@ -967,6 +967,10 @@ public:
 	PalEntry SpecialColors[5];
 	FColormap Colormap;
 
+	DVector3 SunPosition;
+	PalEntry SunColor;
+	double SunStrength;
+
 private:
 	FDynamicColormap *_ColorMap;	// [RH] Per-sector colormap
 
