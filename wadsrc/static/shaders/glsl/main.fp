@@ -26,7 +26,7 @@ out vec4 FragNormal;
 
 
 uniform sampler2D tex;
-uniform sampler2D ShadowMap;
+uniform sampler2DShadow ShadowMap;
 
 vec4 Process(vec4 color);
 vec4 ProcessTexel();
@@ -160,33 +160,7 @@ float sampleShadowmap(vec2 dir, float v)
 {
 	float u = shadowDirToU(dir);
 	float dist2 = dot(dir, dir);
-	return texture(ShadowMap, vec2(u, v)).x > dist2 ? 1.0 : 0.0;
-}
-
-float sampleShadowmapLinear(vec2 dir, float v)
-{
-	float u = shadowDirToU(dir);
-	float dist2 = dot(dir, dir);
-
-	vec2 isize = textureSize(ShadowMap, 0);
-	vec2 size = vec2(isize);
-
-	vec2 fetchPos = vec2(u, v) * size - vec2(0.5, 0.0);
-	if (fetchPos.x < 0.0)
-		fetchPos.x += size.x;
-
-	ivec2 ifetchPos = ivec2(fetchPos);
-	int y = ifetchPos.y;
-
-	float t = fract(fetchPos.x);
-	int x0 = ifetchPos.x;
-	int x1 = ifetchPos.x + 1;
-	if (x1 == isize.x)
-		x1 = 0;
-
-	float depth0 = texelFetch(ShadowMap, ivec2(x0, y), 0).x;
-	float depth1 = texelFetch(ShadowMap, ivec2(x1, y), 0).x;
-	return mix(step(dist2, depth0), step(dist2, depth1), t);
+	return texture(ShadowMap, vec3(u, v, dist2));
 }
 
 //===========================================================================
@@ -198,8 +172,7 @@ float sampleShadowmapLinear(vec2 dir, float v)
 #define PCF_FILTER_STEP_COUNT 3
 #define PCF_COUNT (PCF_FILTER_STEP_COUNT * 2 + 1)
 
-// #define USE_LINEAR_SHADOW_FILTER
-#define USE_PCF_SHADOW_FILTER 1
+//#define USE_PCF_SHADOW_FILTER 1
 
 float shadowmapAttenuation(vec4 lightpos, float shadowIndex)
 {
@@ -215,10 +188,7 @@ float shadowmapAttenuation(vec4 lightpos, float shadowIndex)
 
 	vec2 dir = ray / length;
 
-#if defined(USE_LINEAR_SHADOW_FILTER)
-	ray -= dir * 6.0; // Shadow acne margin
-	return sampleShadowmapLinear(ray, v);
-#elif defined(USE_PCF_SHADOW_FILTER)
+#if defined(USE_PCF_SHADOW_FILTER)
 	ray -= dir * 2.0; // Shadow acne margin
 	dir = dir * min(length / 50.0, 1.0); // avoid sampling behind light
 

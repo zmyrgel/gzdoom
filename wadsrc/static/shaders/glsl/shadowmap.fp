@@ -164,4 +164,6 @@ void main()
 	{
 		FragColor = vec4(1.0, 0.0, 0.0, 1.0);
 	}
+
+	gl_FragDepth = FragColor.x;
 }

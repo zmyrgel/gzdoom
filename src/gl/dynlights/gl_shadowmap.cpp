@@ -75,6 +75,8 @@ namespace
 	int LightsShadowmapped;
 }
 
+CVAR(Bool, gl_shadowmap_linear, false, 0)
+
 ADD_STAT(shadowmap)
 {
 	FString out;
@@ -124,8 +126,18 @@ void FShadowMap::Update()
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, mNodesBuffer);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, mLinesBuffer);
 
+	glEnable(GL_DEPTH_TEST);
+	GLint oldDepthFunc = GL_LESS;
+	glGetIntegerv(GL_DEPTH_FUNC, &oldDepthFunc);
+	glDepthFunc(GL_ALWAYS);
+	glDisable(GL_DEPTH_CLAMP);
+
 	glViewport(0, 0, gl_shadowmap_quality, 1024);
 	GLRenderer->RenderScreenQuad();
+
+	glEnable(GL_DEPTH_CLAMP);
+	glDepthFunc(oldDepthFunc);
+	glDisable(GL_DEPTH_TEST);
 
 	const auto &viewport = GLRenderer->mScreenViewport;
 	glViewport(viewport.left, viewport.top, viewport.width, viewport.height);
@@ -135,6 +147,8 @@ void FShadowMap::Update()
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, 0);
 
 	GLRenderer->mBuffers->BindShadowMapTexture(16);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, gl_shadowmap_linear ? GL_LINEAR : GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, gl_shadowmap_linear ? GL_LINEAR : GL_NEAREST);
 
 	FGLDebug::PopGroup();
 

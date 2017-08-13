@@ -490,12 +490,14 @@ GLuint FGLRenderBuffers::Create2DTexture(const FString &name, GLuint format, int
 	case GL_RGBA16F:			dataformat = GL_RGBA; datatype = GL_FLOAT; break;
 	case GL_RGBA32F:			dataformat = GL_RGBA; datatype = GL_FLOAT; break;
 	case GL_RGBA16_SNORM:		dataformat = GL_RGBA; datatype = GL_SHORT; break;
+	case GL_R8:					dataformat = GL_RED; datatype = GL_UNSIGNED_BYTE; break;
 	case GL_R32F:				dataformat = GL_RED; datatype = GL_FLOAT; break;
 	case GL_R16F:				dataformat = GL_RED; datatype = GL_FLOAT; break;
 	case GL_RG32F:				dataformat = GL_RG; datatype = GL_FLOAT; break;
 	case GL_RG16F:				dataformat = GL_RG; datatype = GL_FLOAT; break;
 	case GL_RGB10_A2:			dataformat = GL_RGBA; datatype = GL_UNSIGNED_INT_10_10_10_2; break;
 	case GL_DEPTH_COMPONENT24:	dataformat = GL_DEPTH_COMPONENT; datatype = GL_FLOAT; break;
+	case GL_DEPTH_COMPONENT32F:	dataformat = GL_DEPTH_COMPONENT; datatype = GL_FLOAT; break;
 	case GL_STENCIL_INDEX8:		dataformat = GL_STENCIL_INDEX; datatype = GL_INT; break;
 	case GL_DEPTH24_STENCIL8:	dataformat = GL_DEPTH_STENCIL; datatype = GL_UNSIGNED_INT_24_8; break;
 	default: I_FatalError("Unknown format passed to FGLRenderBuffers.Create2DTexture");
@@ -578,6 +580,19 @@ GLuint FGLRenderBuffers::CreateFrameBuffer(const FString &name, GLuint colorbuff
 	else
 		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, colorbuffer, 0);
 	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, depthstencil);
+	if (CheckFrameBufferCompleteness())
+		ClearFrameBuffer(true, true);
+	return handle;
+}
+
+GLuint FGLRenderBuffers::CreateShadowMapFrameBuffer(const FString &name, GLuint colortexture, GLuint depthtexture)
+{
+	GLuint handle = 0;
+	glGenFramebuffers(1, &handle);
+	glBindFramebuffer(GL_FRAMEBUFFER, handle);
+	FGLDebug::LabelObject(GL_FRAMEBUFFER, handle, name);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, colortexture, 0);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depthtexture, 0);
 	if (CheckFrameBufferCompleteness())
 		ClearFrameBuffer(true, true);
 	return handle;
@@ -763,6 +778,7 @@ void FGLRenderBuffers::BindShadowMapTexture(int texunit)
 void FGLRenderBuffers::ClearShadowMap()
 {
 	DeleteFrameBuffer(mShadowMapFB);
+	DeleteTexture(mShadowMapColorTexture);
 	DeleteTexture(mShadowMapTexture);
 	mCurrentShadowMapSize = 0;
 }
@@ -780,13 +796,15 @@ void FGLRenderBuffers::CreateShadowMap()
 	glGetIntegerv(GL_TEXTURE_BINDING_2D, &textureBinding);
 	glGetIntegerv(GL_FRAMEBUFFER_BINDING, &frameBufferBinding);
 
-	mShadowMapTexture = Create2DTexture("ShadowMap", GL_R32F, gl_shadowmap_quality, 1024);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	// This is just a dummy texture we don't use as there are some idiotic requirements that a FB must have a colorbuffer
+	mShadowMapColorTexture = Create2DTexture("ShadowMapColor", GL_R8, gl_shadowmap_quality, 1024);
 
-	mShadowMapFB = CreateFrameBuffer("ShadowMapFB", mShadowMapTexture);
+	mShadowMapTexture = Create2DTexture("ShadowMap", GL_DEPTH_COMPONENT32F, gl_shadowmap_quality, 1024);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
+
+	mShadowMapFB = CreateShadowMapFrameBuffer("ShadowMapFB", mShadowMapColorTexture, mShadowMapTexture);
 
 	glBindTexture(GL_TEXTURE_2D, textureBinding);
 	glActiveTexture(activeTex);

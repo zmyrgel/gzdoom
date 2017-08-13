@@ -104,6 +104,7 @@ private:
 	GLuint CreateFrameBuffer(const FString &name, GLuint colorbuffer);
 	GLuint CreateFrameBuffer(const FString &name, GLuint colorbuffer, GLuint depthstencil, bool colorIsARenderBuffer);
 	GLuint CreateFrameBuffer(const FString &name, GLuint colorbuffer0, GLuint colorbuffer1, GLuint colorbuffer2, GLuint depthstencil, bool multisample);
+	GLuint CreateShadowMapFrameBuffer(const FString &name, GLuint colortexture, GLuint depthtexture);
 	bool CheckFrameBufferCompleteness();
 	void ClearFrameBuffer(bool stencil, bool depth);
 	void DeleteTexture(GLuint &handle);
@@ -142,6 +143,7 @@ private:
 
 	// Shadow map texture
 	GLuint mShadowMapTexture = 0;
+	GLuint mShadowMapColorTexture = 0;
 	GLuint mShadowMapFB = 0;
 	int mCurrentShadowMapSize = 0;
 
