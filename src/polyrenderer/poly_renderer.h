@@ -38,6 +38,7 @@ class AActor;
 class DCanvas;
 class DrawerCommandQueue;
 typedef std::shared_ptr<DrawerCommandQueue> DrawerCommandQueuePtr;
+class HardpolyRenderer;
 
 class PolyRenderer
 {
@@ -60,6 +61,9 @@ public:
 	FViewWindow Viewwindow;
 	FRenderViewpoint Viewpoint;
 	PolyLightVisibility Light;
+
+	bool RedirectToHardpoly = false;
+	std::shared_ptr<HardpolyRenderer> Hardpoly;
 
 private:
 	void RenderActorView(AActor *actor, bool dontmaplines);

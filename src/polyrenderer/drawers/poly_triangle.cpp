@@ -35,6 +35,7 @@
 #include "r_data/colormaps.h"
 #include "poly_triangle.h"
 #include "polyrenderer/poly_renderer.h"
+#include "polyrenderer/hardpoly/hardpolyrenderer.h"
 #include "swrenderer/drawers/r_draw_rgba.h"
 #include "screen_triangle.h"
 #include "x86.h"
@@ -50,26 +51,46 @@ uint8_t *PolyTriangleDrawer::dest;
 bool PolyTriangleDrawer::dest_bgra;
 bool PolyTriangleDrawer::mirror;
 
+void PolyTriangleDrawer::clear_buffers(DCanvas *canvas)
+{
+	if (PolyRenderer::Instance()->RedirectToHardpoly)
+	{
+		PolyRenderer::Instance()->Hardpoly->ClearBuffers(canvas);
+	}
+	else
+	{
+		PolyStencilBuffer::Instance()->Clear(canvas->GetWidth(), canvas->GetHeight(), 0);
+		PolyZBuffer::Instance()->Resize(canvas->GetPitch(), canvas->GetHeight());
+	}
+}
+
 void PolyTriangleDrawer::set_viewport(int x, int y, int width, int height, DCanvas *canvas)
 {
-	dest = (uint8_t*)canvas->GetBuffer();
-	dest_width = canvas->GetWidth();
-	dest_height = canvas->GetHeight();
-	dest_pitch = canvas->GetPitch();
-	dest_bgra = canvas->IsBgra();
+	if (PolyRenderer::Instance()->RedirectToHardpoly)
+	{
+		PolyRenderer::Instance()->Hardpoly->SetViewport(x, y, width, height, canvas);
+	}
+	else
+	{
+		dest = (uint8_t*)canvas->GetBuffer();
+		dest_width = canvas->GetWidth();
+		dest_height = canvas->GetHeight();
+		dest_pitch = canvas->GetPitch();
+		dest_bgra = canvas->IsBgra();
 
-	int offsetx = clamp(x, 0, dest_width);
-	int offsety = clamp(y, 0, dest_height);
-	int pixelsize = dest_bgra ? 4 : 1;
+		int offsetx = clamp(x, 0, dest_width);
+		int offsety = clamp(y, 0, dest_height);
+		int pixelsize = dest_bgra ? 4 : 1;
 
-	viewport_x = x - offsetx;
-	viewport_y = y - offsety;
-	viewport_width = width;
-	viewport_height = height;
+		viewport_x = x - offsetx;
+		viewport_y = y - offsety;
+		viewport_width = width;
+		viewport_height = height;
 
-	dest += (offsetx + offsety * dest_pitch) * pixelsize;
-	dest_width = clamp(viewport_x + viewport_width, 0, dest_width - offsetx);
-	dest_height = clamp(viewport_y + viewport_height, 0, dest_height - offsety);
+		dest += (offsetx + offsety * dest_pitch) * pixelsize;
+		dest_width = clamp(viewport_x + viewport_width, 0, dest_width - offsetx);
+		dest_height = clamp(viewport_y + viewport_height, 0, dest_height - offsety);
+	}
 
 	mirror = false;
 }

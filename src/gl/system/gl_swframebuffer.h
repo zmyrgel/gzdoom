@@ -31,6 +31,8 @@ public:
 	OpenGLSWFrameBuffer(void *hMonitor, int width, int height, int bits, int refreshHz, bool fullscreen, bool bgra);
 	~OpenGLSWFrameBuffer();
 
+	void SetViewFB(int handle);
+
 	bool IsValid() override;
 	bool Lock(bool buffered) override;
 	void Unlock() override;
@@ -473,6 +475,8 @@ private:
 	std::unique_ptr<HWTexture> FBTexture;
 	std::unique_ptr<HWTexture> PaletteTexture;
 	std::unique_ptr<HWTexture> ScreenshotTexture;
+
+	int ViewFBHandle = 0;
 
 	std::unique_ptr<HWVertexBuffer> VertexBuffer;
 	FBVERTEX *VertexData = nullptr;

@@ -33,14 +33,19 @@
 #include "st_stuff.h"
 #include "g_levellocals.h"
 #include "polyrenderer/scene/poly_light.h"
+#include "polyrenderer/hardpoly/hardpolyrenderer.h"
 #include "swrenderer/scene/r_scene.h"
 #include "swrenderer/drawers/r_draw_rgba.h"
 #include "swrenderer/viewport/r_viewport.h"
 #include "swrenderer/r_swcolormaps.h"
+#include "gl/system/gl_swframebuffer.h"
 
 EXTERN_CVAR(Bool, r_shadercolormaps)
 EXTERN_CVAR(Int, screenblocks)
 EXTERN_CVAR(Float, r_visibility)
+
+CVAR(Bool, r_hardpoly, true, 0)
+
 void InitGLRMapinfoData();
 
 /////////////////////////////////////////////////////////////////////////////
@@ -68,18 +73,40 @@ void PolyRenderer::RenderView(player_t *player)
 	ActiveRatio(width, height, &trueratio);
 	//viewport->SetViewport(&Thread, width, height, trueratio);
 
+	if (r_hardpoly)
+	{
+		RedirectToHardpoly = true;
+		if (!Hardpoly)
+			Hardpoly = std::make_shared<HardpolyRenderer>();
+
+		Hardpoly->Begin();
+	}
+	else
+	{
+		auto swframebuffer = static_cast<OpenGLSWFrameBuffer*>(screen);
+		swframebuffer->SetViewFB(0);
+	}
+
 	RenderActorView(player->mo, false);
 
-	// Apply special colormap if the target cannot do it
-	CameraLight *cameraLight = CameraLight::Instance();
-	if (cameraLight->ShaderColormap() && RenderTarget->IsBgra() && !(r_shadercolormaps && screen->Accel2D))
+	if (RedirectToHardpoly)
 	{
-		DrawQueue->Push<ApplySpecialColormapRGBACommand>(cameraLight->ShaderColormap(), screen);
+		Hardpoly->End();
+		RedirectToHardpoly = false;
 	}
-	
-	DrawerThreads::Execute(DrawQueue);
-	DrawerThreads::WaitForWorkers();
-	DrawQueue->Clear();
+	else
+	{
+		// Apply special colormap if the target cannot do it
+		CameraLight *cameraLight = CameraLight::Instance();
+		if (cameraLight->ShaderColormap() && RenderTarget->IsBgra() && !(r_shadercolormaps && screen->Accel2D))
+		{
+			DrawQueue->Push<ApplySpecialColormapRGBACommand>(cameraLight->ShaderColormap(), screen);
+		}
+
+		DrawerThreads::Execute(DrawQueue);
+		DrawerThreads::WaitForWorkers();
+		DrawQueue->Clear();
+	}
 }
 
 void PolyRenderer::RenderViewToCanvas(AActor *actor, DCanvas *canvas, int x, int y, int width, int height, bool dontmaplines)
@@ -158,8 +185,7 @@ void PolyRenderer::RenderRemainingPlayerSprites()
 void PolyRenderer::ClearBuffers()
 {
 	FrameMemory.Clear();
-	PolyStencilBuffer::Instance()->Clear(RenderTarget->GetWidth(), RenderTarget->GetHeight(), 0);
-	PolyZBuffer::Instance()->Resize(RenderTarget->GetPitch(), RenderTarget->GetHeight());
+	PolyTriangleDrawer::clear_buffers(RenderTarget);
 	NextStencilValue = 0;
 }
 
@@ -215,4 +241,16 @@ void PolyRenderer::SetupPerspectiveMatrix()
 		TriMatrix::translate((float)-Viewpoint.Pos.X, (float)-Viewpoint.Pos.Y, (float)-Viewpoint.Pos.Z);
 
 	WorldToClip = TriMatrix::perspective(fovy, ratio, 5.0f, 65535.0f) * worldToView;
+
+	if (RedirectToHardpoly)
+	{
+		Hardpoly->worldToView =
+			Mat4f::Rotate(adjustedPitch, 1.0f, 0.0f, 0.0f) *
+			Mat4f::Rotate(adjustedViewAngle, 0.0f, -1.0f, 0.0f) *
+			Mat4f::Scale(1.0f, level.info->pixelstretch, 1.0f) *
+			Mat4f::SwapYZ() *
+			Mat4f::Translate((float)-Viewpoint.Pos.X, (float)-Viewpoint.Pos.Y, (float)-Viewpoint.Pos.Z);
+
+		Hardpoly->viewToClip = Mat4f::Perspective(fovy, ratio, 5.0f, 65535.0f);
+	}
 }

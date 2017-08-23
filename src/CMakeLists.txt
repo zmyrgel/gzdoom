@@ -678,6 +678,7 @@ file( GLOB HEADER_FILES
 	polyrenderer/math/*.h
 	polyrenderer/drawers/*.h
 	polyrenderer/scene/*.h
+	polyrenderer/hardpoly/*.h
 	gl/*.h
 	gl/api/*.h
 	gl/data/*.h
@@ -761,6 +762,9 @@ set( POLYRENDER_SOURCES
 	polyrenderer/drawers/poly_draw_args.cpp
 	polyrenderer/drawers/screen_triangle.cpp
 	polyrenderer/math/tri_matrix.cpp
+	polyrenderer/math/gpu_types.cpp
+	polyrenderer/hardpoly/gpu_context.cpp
+	polyrenderer/hardpoly/hardpolyrenderer.cpp
 )
 
 # These files will be flagged as "headers" so that they appear in project files
@@ -1354,6 +1358,7 @@ source_group("Poly Renderer" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/po
 source_group("Poly Renderer\\Math" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/polyrenderer/math/.+")
 source_group("Poly Renderer\\Drawers" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/polyrenderer/drawers/.+")
 source_group("Poly Renderer\\Scene" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/polyrenderer/scene/.+")
+source_group("Poly Renderer\\Hardpoly" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/polyrenderer/hardpoly/.+")
 source_group("Render Data\\Resource Headers" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/r_data/.+\\.h$")
 source_group("Render Data\\Resource Sources" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/r_data/.+\\.cpp$")
 source_group("Render Data\\Textures" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/textures/.+")

@@ -4,6 +4,7 @@
 #include "drawers/poly_triangle.cpp"
 #include "drawers/screen_triangle.cpp"
 #include "math/tri_matrix.cpp"
+#include "math/gpu_types.cpp"
 #include "scene/poly_cull.cpp"
 #include "scene/poly_decal.cpp"
 #include "scene/poly_particle.cpp"
@@ -16,3 +17,5 @@
 #include "scene/poly_wall.cpp"
 #include "scene/poly_wallsprite.cpp"
 #include "scene/poly_light.cpp"
+#include "hardpoly/gpu_context.cpp"
+#include "hardpoly/hardpolyrenderer.cpp"

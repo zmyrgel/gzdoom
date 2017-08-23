@@ -75,6 +75,7 @@ public:
 	bool FaceCullCCW() const { return mFaceCullCCW; }
 	bool WriteColor() const { return mWriteColor; }
 
+	FTexture *Texture() const { return mTexture; }
 	const uint8_t *TexturePixels() const { return mTexturePixels; }
 	int TextureWidth() const { return mTextureWidth; }
 	int TextureHeight() const { return mTextureHeight; }
@@ -119,6 +120,7 @@ private:
 	bool mWriteStencil = true;
 	bool mWriteColor = true;
 	bool mWriteDepth = true;
+	FTexture *mTexture = nullptr;
 	const uint8_t *mTexturePixels = nullptr;
 	int mTextureWidth = 0;
 	int mTextureHeight = 0;

@@ -36,6 +36,7 @@
 #include "swrenderer/r_swcolormaps.h"
 #include "poly_draw_args.h"
 #include "swrenderer/viewport/r_viewport.h"
+#include "polyrenderer/hardpoly/hardpolyrenderer.h"
 
 void PolyDrawArgs::SetClipPlane(const PolyClipPlane &plane)
 {
@@ -55,6 +56,7 @@ void PolyDrawArgs::SetTexture(const uint8_t *texels, int width, int height)
 
 void PolyDrawArgs::SetTexture(FTexture *texture)
 {
+	mTexture = texture;
 	mTextureWidth = texture->GetWidth();
 	mTextureHeight = texture->GetHeight();
 	if (PolyRenderer::Instance()->RenderTarget->IsBgra())
@@ -76,6 +78,7 @@ void PolyDrawArgs::SetTexture(FTexture *texture, uint32_t translationID, bool fo
 			else
 				mTranslation = table->Remap;
 
+			mTexture = texture;
 			mTextureWidth = texture->GetWidth();
 			mTextureHeight = texture->GetHeight();
 			mTexturePixels = texture->GetPixels();
@@ -85,6 +88,7 @@ void PolyDrawArgs::SetTexture(FTexture *texture, uint32_t translationID, bool fo
 	
 	if (forcePal)
 	{
+		mTexture = texture;
 		mTextureWidth = texture->GetWidth();
 		mTextureHeight = texture->GetHeight();
 		mTexturePixels = texture->GetPixels();
@@ -138,7 +142,10 @@ void PolyDrawArgs::DrawArray(const TriVertex *vertices, int vcount, PolyDrawMode
 	mVertices = vertices;
 	mVertexCount = vcount;
 	mDrawMode = mode;
-	PolyRenderer::Instance()->DrawQueue->Push<DrawPolyTrianglesCommand>(*this, PolyTriangleDrawer::is_mirror());
+	if (PolyRenderer::Instance()->RedirectToHardpoly)
+		PolyRenderer::Instance()->Hardpoly->DrawArray(*this);
+	else
+		PolyRenderer::Instance()->DrawQueue->Push<DrawPolyTrianglesCommand>(*this, PolyTriangleDrawer::is_mirror());
 }
 
 void PolyDrawArgs::SetStyle(const FRenderStyle &renderstyle, double alpha, uint32_t fillcolor, uint32_t translationID, FTexture *tex, bool fullbright)

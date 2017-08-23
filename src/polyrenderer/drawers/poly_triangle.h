@@ -39,6 +39,7 @@ typedef void(*PolyDrawFuncPtr)(const TriDrawTriangleArgs *, WorkerThreadData *);
 class PolyTriangleDrawer
 {
 public:
+	static void clear_buffers(DCanvas *canvas);
 	static void set_viewport(int x, int y, int width, int height, DCanvas *canvas);
 	static void toggle_mirror();
 	static bool is_mirror();
