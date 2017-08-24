@@ -120,6 +120,7 @@ void HardpolyRenderer::RenderBatch(DrawBatch *batch)
 		FrameUniforms frameUniforms;
 		frameUniforms.WorldToView = worldToView;
 		frameUniforms.ViewToProjection = viewToClip;
+		frameUniforms.GlobVis = R_GetGlobVis(PolyRenderer::Instance()->Viewwindow, r_visibility);
 
 		mFrameUniforms[mCurrentFrameUniforms]->Upload(&frameUniforms, (int)sizeof(FrameUniforms));
 
@@ -333,6 +334,7 @@ void HardpolyRenderer::CompileShaders()
 				{
 					mat4 WorldToView;
 					mat4 ViewToProjection;
+					float GlobVis;
 				};
 
 				in vec4 Position;
@@ -354,6 +356,7 @@ void HardpolyRenderer::CompileShaders()
 				{
 					mat4 WorldToView;
 					mat4 ViewToProjection;
+					float GlobVis;
 				};
 
 				layout(std140) uniform FaceUniforms
@@ -370,9 +373,8 @@ void HardpolyRenderer::CompileShaders()
 				
 				float SoftwareLight()
 				{
-					float globVis = 1706.0;
 					float z = -PositionInView.z;
-					float vis = globVis / z;
+					float vis = GlobVis / z;
 					float shade = 64.0 - (LightLevel + 12.0) * 32.0/128.0;
 					float lightscale = clamp((shade - min(24.0, vis)) / 32.0, 0.0, 31.0/32.0);
 					return 1.0 - lightscale;
@@ -380,12 +382,11 @@ void HardpolyRenderer::CompileShaders()
 
 				int SoftwareLightPal()
 				{
-					float globVis = 1706.0;
 					float z = -PositionInView.z;
-					float vis = globVis / z;
+					float vis = GlobVis / z;
 					float shade = 64.0 - (LightLevel + 12.0) * 32.0/128.0;
 					float lightscale = clamp((shade - min(24.0, vis)), 0.0, 31.0);
-					return int(lightscale + 0.5);
+					return int(lightscale);
 				}
 				
 				void main()
@@ -414,6 +415,7 @@ void HardpolyRenderer::CompileShaders()
 				{
 					mat4 WorldToView;
 					mat4 ViewToProjection;
+					float GlobVis;
 				};
 
 				in vec4 Position;

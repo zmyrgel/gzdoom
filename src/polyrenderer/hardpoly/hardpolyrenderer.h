@@ -33,6 +33,8 @@ struct FrameUniforms
 {
 	Mat4f WorldToView;
 	Mat4f ViewToProjection;
+	float GlobVis;
+	float Padding1, Padding2, Padding3;
 };
 
 struct FaceUniforms
