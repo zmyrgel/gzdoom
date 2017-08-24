@@ -210,16 +210,9 @@ void PolyDrawArgs::SetStyle(const FRenderStyle &renderstyle, double alpha, uint3
 
 /////////////////////////////////////////////////////////////////////////////
 
-void RectDrawArgs::SetTexture(const uint8_t *texels, int width, int height)
-{
-	mTexturePixels = texels;
-	mTextureWidth = width;
-	mTextureHeight = height;
-	mTranslation = nullptr;
-}
-
 void RectDrawArgs::SetTexture(FTexture *texture)
 {
+	mTexture = texture;
 	mTextureWidth = texture->GetWidth();
 	mTextureHeight = texture->GetHeight();
 	if (PolyRenderer::Instance()->RenderTarget->IsBgra())
@@ -241,6 +234,7 @@ void RectDrawArgs::SetTexture(FTexture *texture, uint32_t translationID, bool fo
 			else
 				mTranslation = table->Remap;
 
+			mTexture = texture;
 			mTextureWidth = texture->GetWidth();
 			mTextureHeight = texture->GetHeight();
 			mTexturePixels = texture->GetPixels();
@@ -250,6 +244,7 @@ void RectDrawArgs::SetTexture(FTexture *texture, uint32_t translationID, bool fo
 
 	if (forcePal)
 	{
+		mTexture = texture;
 		mTextureWidth = texture->GetWidth();
 		mTextureHeight = texture->GetHeight();
 		mTexturePixels = texture->GetPixels();
@@ -298,7 +293,10 @@ void RectDrawArgs::Draw(double x0, double x1, double y0, double y1, double u0, d
 	mU1 = (float)u1;
 	mV0 = (float)v0;
 	mV1 = (float)v1;
-	PolyRenderer::Instance()->DrawQueue->Push<DrawRectCommand>(*this);
+	if (PolyRenderer::Instance()->RedirectToHardpoly)
+		PolyRenderer::Instance()->Hardpoly->DrawRect(*this);
+	else
+		PolyRenderer::Instance()->DrawQueue->Push<DrawRectCommand>(*this);
 }
 
 void RectDrawArgs::SetStyle(const FRenderStyle &renderstyle, double alpha, uint32_t fillcolor, uint32_t translationID, FTexture *tex, bool fullbright)

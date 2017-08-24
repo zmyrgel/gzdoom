@@ -39,9 +39,17 @@ struct FrameUniforms
 
 struct FaceUniforms
 {
-	float LightLevel;
+	float Light;
 	float AlphaTest;
 	float Padding2, Padding3;
+};
+
+struct RectUniforms
+{
+	float x0, y0, u0, v0;
+	float x1, y1, u1, v1;
+	float Light;
+	float Padding1, Padding2, Padding3;
 };
 
 struct DrawRun
@@ -90,6 +98,7 @@ public:
 	void ClearBuffers(DCanvas *canvas);
 	void SetViewport(int x, int y, int width, int height, DCanvas *canvas);
 	void DrawArray(const PolyDrawArgs &args);
+	void DrawRect(const RectDrawArgs &args);
 	void End();
 
 	void RenderBatch(DrawBatch *batch);
@@ -101,6 +110,7 @@ private:
 	void SetupFramebuffer();
 	void CompileShaders();
 	void CreateSamplers();
+	void UpdateFrameUniforms();
 
 	DrawBatcher mDrawBatcher;
 
@@ -123,13 +133,18 @@ private:
 	bool mFrameUniformsDirty = true;
 
 	std::shared_ptr<GPUUniformBuffer> mFaceUniforms;
+	std::shared_ptr<GPUUniformBuffer> mRectUniforms;
 
 	std::shared_ptr<GPUVertexArray> mVertexArray;
 	std::map<FTexture*, std::shared_ptr<GPUTexture2D>> mTextures;
 	std::map<const uint8_t *, std::shared_ptr<GPUTexture2D>> mColormaps;
 
+	std::shared_ptr<GPUVertexArray> mScreenQuad;
+	std::shared_ptr<GPUVertexBuffer> mScreenQuadVertexBuffer;
+
 	std::shared_ptr<GPUProgram> mOpaqueProgram;
 	std::shared_ptr<GPUProgram> mStencilProgram;
+	std::shared_ptr<GPUProgram> mRectProgram;
 
 	std::shared_ptr<GPUSampler> mSamplerLinear;
 	std::shared_ptr<GPUSampler> mSamplerNearest;

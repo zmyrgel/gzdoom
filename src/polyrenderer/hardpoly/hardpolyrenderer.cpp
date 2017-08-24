@@ -98,7 +98,9 @@ void HardpolyRenderer::DrawArray(const PolyDrawArgs &drawargs)
 	run.DrawMode = drawargs.DrawMode();
 	run.BaseColormap = drawargs.BaseColormap();
 	run.Uniforms.AlphaTest = 0.5f;
-	run.Uniforms.LightLevel = drawargs.Light();
+	run.Uniforms.Light = drawargs.Light();
+	if (drawargs.FixedLight())
+		run.Uniforms.Light = -run.Uniforms.Light - 1;
 
 	mDrawBatcher.GetVertices(this, vcount);
 	run.Start = mDrawBatcher.mNextVertex;
@@ -108,7 +110,7 @@ void HardpolyRenderer::DrawArray(const PolyDrawArgs &drawargs)
 	mDrawBatcher.mCurrentBatch->DrawRuns.push_back(run);
 }
 
-void HardpolyRenderer::RenderBatch(DrawBatch *batch)
+void HardpolyRenderer::UpdateFrameUniforms()
 {
 	if (mFrameUniformsDirty)
 	{
@@ -126,6 +128,79 @@ void HardpolyRenderer::RenderBatch(DrawBatch *batch)
 
 		mFrameUniformsDirty = false;
 	}
+}
+
+void HardpolyRenderer::DrawRect(const RectDrawArgs &args)
+{
+	UpdateFrameUniforms();
+
+	if (!mScreenQuad)
+	{
+		Vec2f quad[4] =
+		{
+			{ 0.0f, 0.0f },
+			{ 1.0f, 0.0f },
+			{ 0.0f, 1.0f },
+			{ 1.0f, 1.0f },
+		};
+		mScreenQuadVertexBuffer = std::make_shared<GPUVertexBuffer>(quad, (int)(sizeof(Vec2f) * 4));
+		std::vector<GPUVertexAttributeDesc> desc =
+		{
+			{ 0, 2, GPUVertexAttributeType::Float, false, 0, 0, mScreenQuadVertexBuffer }
+		};
+		mScreenQuad = std::make_shared<GPUVertexArray>(desc);
+	}
+
+	if (!mRectUniforms)
+	{
+		mRectUniforms = std::make_shared<GPUUniformBuffer>(nullptr, (int)sizeof(RectUniforms));
+	}
+
+	RectUniforms uniforms;
+	uniforms.x0 = args.X0() / (float)screen->GetWidth() * 2.0f - 1.0f;
+	uniforms.x1 = args.X1() / (float)screen->GetWidth() * 2.0f - 1.0f;
+	uniforms.y0 = args.Y0() / (float)screen->GetHeight() * 2.0f - 1.0f;
+	uniforms.y1 = args.Y1() / (float)screen->GetHeight() * 2.0f - 1.0f;
+	uniforms.u0 = args.U0();
+	uniforms.v0 = args.V0();
+	uniforms.u1 = args.U1();
+	uniforms.v1 = args.V1();
+	uniforms.Light = args.Light();
+	mRectUniforms->Upload(&uniforms, (int)sizeof(RectUniforms));
+
+	mContext->SetVertexArray(mScreenQuad);
+	mContext->SetProgram(mRectProgram);
+
+	int loc = glGetUniformLocation(mRectProgram->Handle(), "DiffuseTexture");
+	if (loc != -1)
+		glUniform1i(loc, 0);
+
+	loc = glGetUniformLocation(mRectProgram->Handle(), "BasecolormapTexture");
+	if (loc != -1)
+		glUniform1i(loc, 1);
+
+	mContext->SetUniforms(0, mFrameUniforms[mCurrentFrameUniforms]);
+	mContext->SetUniforms(1, mRectUniforms);
+	mContext->SetSampler(0, mSamplerNearest);
+	mContext->SetSampler(1, mSamplerNearest);
+	mContext->SetTexture(0, GetTexturePal(args.Texture()));
+	mContext->SetTexture(1, GetColormapTexture(args.BaseColormap()));
+
+	mContext->Draw(GPUDrawMode::TriangleStrip, 0, 4);
+
+	mContext->SetTexture(0, nullptr);
+	mContext->SetTexture(1, nullptr);
+	mContext->SetSampler(0, nullptr);
+	mContext->SetSampler(1, nullptr);
+	mContext->SetUniforms(0, nullptr);
+	mContext->SetUniforms(1, nullptr);
+	mContext->SetVertexArray(nullptr);
+	mContext->SetProgram(nullptr);
+}
+
+void HardpolyRenderer::RenderBatch(DrawBatch *batch)
+{
+	UpdateFrameUniforms();
 
 	if (!mFaceUniforms)
 	{
@@ -361,7 +436,7 @@ void HardpolyRenderer::CompileShaders()
 
 				layout(std140) uniform FaceUniforms
 				{
-					float LightLevel;
+					float Light;
 					float AlphaTest;
 				};
 
@@ -375,16 +450,19 @@ void HardpolyRenderer::CompileShaders()
 				{
 					float z = -PositionInView.z;
 					float vis = GlobVis / z;
-					float shade = 64.0 - (LightLevel + 12.0) * 32.0/128.0;
+					float shade = 64.0 - (Light + 12.0) * 32.0/128.0;
 					float lightscale = clamp((shade - min(24.0, vis)) / 32.0, 0.0, 31.0/32.0);
 					return 1.0 - lightscale;
 				}
 
 				int SoftwareLightPal()
 				{
+					if (Light < 0)
+						return 31 - int((-1.0 - Light) * 31.0 / 255.0 + 0.5);
+
 					float z = -PositionInView.z;
 					float vis = GlobVis / z;
-					float shade = 64.0 - (LightLevel + 12.0) * 32.0/128.0;
+					float shade = 64.0 - (Light + 12.0) * 32.0/128.0;
 					float lightscale = clamp((shade - min(24.0, vis)), 0.0, 31.0);
 					return int(lightscale);
 				}
@@ -404,6 +482,62 @@ void HardpolyRenderer::CompileShaders()
 		mOpaqueProgram->Link("program");
 		mOpaqueProgram->SetUniformBlock("FrameUniforms", 0);
 		mOpaqueProgram->SetUniformBlock("FaceUniforms", 1);
+	}
+
+	if (!mRectProgram)
+	{
+		mRectProgram = std::make_shared<GPUProgram>();
+
+		mRectProgram->Compile(GPUShaderType::Vertex, "vertex", R"(
+				layout(std140) uniform RectUniforms
+				{
+					float X0, Y0, U0, V0;
+					float X1, Y1, U1, V1;
+					float Light;
+				};
+
+				in vec4 Position;
+				out vec2 UV;
+
+				void main()
+				{
+					gl_Position.x = mix(X0, X1, Position.x);
+					gl_Position.y = mix(Y0, Y1, Position.y);
+					gl_Position.z = -1.0;
+					gl_Position.w = 1.0;
+					UV.x = mix(U0, U1, Position.x);
+					UV.y = mix(V0, V1, Position.y);
+				}
+			)");
+		mRectProgram->Compile(GPUShaderType::Fragment, "fragment", R"(
+				layout(std140) uniform RectUniforms
+				{
+					float X0, Y0, U0, V0;
+					float X1, Y1, U1, V1;
+					float Light;
+				};
+
+				in vec2 UV;
+				out vec4 FragAlbedo;
+				uniform sampler2D DiffuseTexture;
+				uniform sampler2D BasecolormapTexture;
+				
+				void main()
+				{
+					int shade = 31 - int(Light * 31.0 / 255.0 + 0.5);
+					int fg = int(texture(DiffuseTexture, UV).r * 255.0 + 0.5);
+					if (fg == 0) discard;
+					FragAlbedo = texelFetch(BasecolormapTexture, ivec2(fg, shade), 0);
+				}
+			)");
+
+		mRectProgram->SetAttribLocation("Position", 0);
+		mRectProgram->SetAttribLocation("UV", 1);
+		mRectProgram->SetFragOutput("FragAlbedo", 0);
+		mRectProgram->SetFragOutput("FragNormal", 1);
+		mRectProgram->Link("program");
+		mRectProgram->SetUniformBlock("FrameUniforms", 0);
+		mRectProgram->SetUniformBlock("RectUniforms", 1);
 	}
 
 	if (!mStencilProgram)
