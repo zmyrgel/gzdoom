@@ -60,6 +60,9 @@ void GPUContext::End()
 	glDisable(GL_DEPTH_TEST);
 	//glDisable(GL_CULL_FACE);
 	glEnable(GL_BLEND);
+	glBlendEquation(GL_FUNC_ADD);
+	glBlendColor(1.0f, 1.0f, 1.0f, 1.0f);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, oldDrawFramebufferBinding);
 	glBindFramebuffer(GL_READ_FRAMEBUFFER, oldReadFramebufferBinding);

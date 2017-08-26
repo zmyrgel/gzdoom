@@ -41,7 +41,9 @@ struct FaceUniforms
 {
 	float Light;
 	float AlphaTest;
-	float Padding2, Padding3;
+	int Mode;
+	int Padding3;
+	Vec4f FillColor;
 };
 
 struct RectUniforms
@@ -55,11 +57,20 @@ struct RectUniforms
 struct DrawRun
 {
 	FTexture *Texture = nullptr;
+	const uint8_t *Pixels = nullptr;
+	int PixelsWidth = 0;
+	int PixelsHeight = 0;
 	const uint8_t *BaseColormap = nullptr;
+	const uint8_t *Translation = nullptr;
 	int Start = 0;
 	int NumVertices = 0;
 	PolyDrawMode DrawMode = PolyDrawMode::Triangles;
 	FaceUniforms Uniforms;
+	TriBlendMode BlendMode;
+	uint32_t SrcAlpha = 0;
+	uint32_t DestAlpha = 0;
+	bool DepthTest = true;
+	bool WriteDepth = true;
 };
 
 struct DrawBatch
@@ -117,6 +128,8 @@ private:
 	std::shared_ptr<GPUTexture2D> GetTexturePal(FTexture *texture);
 	std::shared_ptr<GPUTexture2D> GetTextureBgra(FTexture *texture);
 	std::shared_ptr<GPUTexture2D> GetColormapTexture(const uint8_t *basecolormap);
+	std::shared_ptr<GPUTexture2D> GetTranslationTexture(const uint8_t *translation);
+	std::shared_ptr<GPUTexture2D> GetEngineTexturePal(const uint8_t *pixels, int width, int height);
 
 	std::shared_ptr<GPUContext> mContext;
 
@@ -138,6 +151,8 @@ private:
 	std::shared_ptr<GPUVertexArray> mVertexArray;
 	std::map<FTexture*, std::shared_ptr<GPUTexture2D>> mTextures;
 	std::map<const uint8_t *, std::shared_ptr<GPUTexture2D>> mColormaps;
+	std::map<const uint8_t *, std::shared_ptr<GPUTexture2D>> mTranslationTextures;
+	std::map<const uint8_t *, std::shared_ptr<GPUTexture2D>> mEngineTextures;
 
 	std::shared_ptr<GPUVertexArray> mScreenQuad;
 	std::shared_ptr<GPUVertexBuffer> mScreenQuadVertexBuffer;
@@ -149,4 +164,18 @@ private:
 	std::shared_ptr<GPUSampler> mSamplerLinear;
 	std::shared_ptr<GPUSampler> mSamplerNearest;
 
+	typedef void(HardpolyRenderer::*BlendSetterFunc)(int srcalpha, int destalpha);
+	static BlendSetterFunc GetBlendSetter(TriBlendMode triblend);
+
+	static int GetSamplerMode(TriBlendMode triblend);
+
+	void SetOpaqueBlend(int srcalpha, int destalpha);
+	void SetMaskedBlend(int srcalpha, int destalpha);
+	void SetAddClampBlend(int srcalpha, int destalpha);
+	void SetSubClampBlend(int srcalpha, int destalpha);
+	void SetRevSubClampBlend(int srcalpha, int destalpha);
+	void SetAddSrcColorBlend(int srcalpha, int destalpha);
+	void SetShadedBlend(int srcalpha, int destalpha);
+	void SetAddClampShadedBlend(int srcalpha, int destalpha);
+	void SetAlphaBlendFunc(int srcalpha, int destalpha);
 };

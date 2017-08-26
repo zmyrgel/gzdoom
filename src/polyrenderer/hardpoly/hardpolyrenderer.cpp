@@ -85,7 +85,7 @@ void HardpolyRenderer::SetViewport(int x, int y, int width, int height, DCanvas 
 
 void HardpolyRenderer::DrawArray(const PolyDrawArgs &drawargs)
 {
-	if (!drawargs.WriteColor() || drawargs.Texture() == nullptr)
+	if (!drawargs.WriteColor())
 		return;
 
 	bool ccw = drawargs.FaceCullCCW();
@@ -93,18 +93,36 @@ void HardpolyRenderer::DrawArray(const PolyDrawArgs &drawargs)
 	if (vcount < 3)
 		return;
 
+	mDrawBatcher.GetVertices(this, vcount);
+
 	DrawRun run;
 	run.Texture = drawargs.Texture();
+	if (!run.Texture)
+	{
+		run.Pixels = drawargs.TexturePixels();
+		run.PixelsWidth = drawargs.TextureWidth();
+		run.PixelsHeight = drawargs.TextureHeight();
+	}
+	run.Translation = drawargs.Translation();
 	run.DrawMode = drawargs.DrawMode();
 	run.BaseColormap = drawargs.BaseColormap();
 	run.Uniforms.AlphaTest = 0.5f;
 	run.Uniforms.Light = drawargs.Light();
 	if (drawargs.FixedLight())
 		run.Uniforms.Light = -run.Uniforms.Light - 1;
-
-	mDrawBatcher.GetVertices(this, vcount);
+	run.Uniforms.Mode = GetSamplerMode(drawargs.BlendMode());
+	run.Uniforms.FillColor.X = RPART(drawargs.Color()) / 255.0f;
+	run.Uniforms.FillColor.Y = GPART(drawargs.Color()) / 255.0f;
+	run.Uniforms.FillColor.Z = BPART(drawargs.Color()) / 255.0f;
+	run.Uniforms.FillColor.W = drawargs.Color();
+	run.BlendMode = drawargs.BlendMode();
+	run.SrcAlpha = drawargs.SrcAlpha();
+	run.DestAlpha = drawargs.DestAlpha();
+	run.DepthTest = drawargs.DepthTest();
+	run.WriteDepth = drawargs.WriteDepth();
 	run.Start = mDrawBatcher.mNextVertex;
 	run.NumVertices = vcount;
+
 	memcpy(mDrawBatcher.mVertices + mDrawBatcher.mNextVertex, drawargs.Vertices(), sizeof(TriVertex) * vcount);
 	mDrawBatcher.mNextVertex += run.NumVertices;
 	mDrawBatcher.mCurrentBatch->DrawRuns.push_back(run);
@@ -179,6 +197,10 @@ void HardpolyRenderer::DrawRect(const RectDrawArgs &args)
 	if (loc != -1)
 		glUniform1i(loc, 1);
 
+	loc = glGetUniformLocation(mRectProgram->Handle(), "TranslationTexture");
+	if (loc != -1)
+		glUniform1i(loc, 2);
+
 	mContext->SetUniforms(0, mFrameUniforms[mCurrentFrameUniforms]);
 	mContext->SetUniforms(1, mRectUniforms);
 	mContext->SetSampler(0, mSamplerNearest);
@@ -220,38 +242,56 @@ void HardpolyRenderer::RenderBatch(DrawBatch *batch)
 	if (loc != -1)
 		glUniform1i(loc, 1);
 
+	loc = glGetUniformLocation(mOpaqueProgram->Handle(), "TranslationTexture");
+	if (loc != -1)
+		glUniform1i(loc, 2);
+
 	//glEnable(GL_STENCIL_TEST);
 	//glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
 	//glStencilFunc(GL_ALWAYS, 1, 0xffffffff);
 
 	mContext->SetSampler(0, mSamplerNearest);
 	mContext->SetSampler(1, mSamplerNearest);
+	mContext->SetSampler(2, mSamplerNearest);
 	for (const auto &run : batch->DrawRuns)
 	{
-		if (run.Texture)
-		{
-			mFaceUniforms->Upload(&run.Uniforms, (int)sizeof(FaceUniforms));
+		mFaceUniforms->Upload(&run.Uniforms, (int)sizeof(FaceUniforms));
 
+		//glDepthFunc(run.DepthTest ? GL_LESS : GL_ALWAYS);
+		//glDepthMask(run.WriteDepth ? GL_TRUE : GL_FALSE);
+
+		BlendSetterFunc blendSetter = GetBlendSetter(run.BlendMode);
+		(*this.*blendSetter)(run.SrcAlpha, run.DestAlpha);
+
+		if (run.Texture)
 			mContext->SetTexture(0, GetTexturePal(run.Texture));
-			mContext->SetTexture(1, GetColormapTexture(run.BaseColormap));
-			switch (run.DrawMode)
-			{
-			case PolyDrawMode::Triangles:
-				mContext->Draw(GPUDrawMode::Triangles, run.Start, run.NumVertices);
-				break;
-			case PolyDrawMode::TriangleStrip:
-				mContext->Draw(GPUDrawMode::TriangleStrip, run.Start, run.NumVertices);
-				break;
-			case PolyDrawMode::TriangleFan:
-				mContext->Draw(GPUDrawMode::TriangleFan, run.Start, run.NumVertices);
-				break;
-			}
+		else if (run.Pixels)
+			mContext->SetTexture(0, GetEngineTexturePal(run.Pixels, run.PixelsWidth, run.PixelsHeight));
+
+		mContext->SetTexture(1, GetColormapTexture(run.BaseColormap));
+
+		if (run.Translation)
+			mContext->SetTexture(2, GetTranslationTexture(run.Translation));
+
+		switch (run.DrawMode)
+		{
+		case PolyDrawMode::Triangles:
+			mContext->Draw(GPUDrawMode::Triangles, run.Start, run.NumVertices);
+			break;
+		case PolyDrawMode::TriangleStrip:
+			mContext->Draw(GPUDrawMode::TriangleStrip, run.Start, run.NumVertices);
+			break;
+		case PolyDrawMode::TriangleFan:
+			mContext->Draw(GPUDrawMode::TriangleFan, run.Start, run.NumVertices);
+			break;
 		}
 	}
 	mContext->SetTexture(0, nullptr);
 	mContext->SetTexture(1, nullptr);
+	mContext->SetTexture(2, nullptr);
 	mContext->SetSampler(0, nullptr);
 	mContext->SetSampler(1, nullptr);
+	mContext->SetSampler(2, nullptr);
 
 	//glDisable(GL_STENCIL_TEST);
 
@@ -298,6 +338,46 @@ void HardpolyRenderer::CreateSamplers()
 		mSamplerLinear = std::make_shared<GPUSampler>(GPUSampleMode::Linear, GPUSampleMode::Nearest, GPUMipmapMode::None, GPUWrapMode::Repeat, GPUWrapMode::Repeat);
 		mSamplerNearest = std::make_shared<GPUSampler>(GPUSampleMode::Nearest, GPUSampleMode::Nearest, GPUMipmapMode::None, GPUWrapMode::Repeat, GPUWrapMode::Repeat);
 	}
+}
+
+std::shared_ptr<GPUTexture2D> HardpolyRenderer::GetTranslationTexture(const uint8_t *translation)
+{
+	auto &texture = mTranslationTextures[translation];
+	if (!texture)
+	{
+		texture = std::make_shared<GPUTexture2D>(256, 1, false, 0, GPUPixelFormat::R8, translation);
+	}
+	return texture;
+}
+
+std::shared_ptr<GPUTexture2D> HardpolyRenderer::GetEngineTexturePal(const uint8_t *src, int width, int height)
+{
+	auto &texture = mEngineTextures[src];
+	if (!texture)
+	{
+		std::vector<uint8_t> pixels;
+		if (src)
+		{
+			pixels.resize(width * height);
+			uint8_t *dest = pixels.data();
+			for (int y = 0; y < height; y++)
+			{
+				for (int x = 0; x < width; x++)
+				{
+					dest[x + y * width] = src[y + x * height];
+				}
+			}
+		}
+		else
+		{
+			width = 1;
+			height = 1;
+			pixels.push_back(0);
+		}
+
+		texture = std::make_shared<GPUTexture2D>(width, height, false, 0, GPUPixelFormat::R8, pixels.data());
+	}
+	return texture;
 }
 
 std::shared_ptr<GPUTexture2D> HardpolyRenderer::GetColormapTexture(const uint8_t *basecolormap)
@@ -438,13 +518,17 @@ void HardpolyRenderer::CompileShaders()
 				{
 					float Light;
 					float AlphaTest;
+					int Mode;
+					int Padding;
+					vec4 FillColor;
 				};
 
 				in vec2 UV;
 				in vec3 PositionInView;
-				out vec4 FragAlbedo;
+				out vec4 FragColor;
 				uniform sampler2D DiffuseTexture;
 				uniform sampler2D BasecolormapTexture;
+				uniform sampler2D TranslationTexture;
 				
 				float SoftwareLight()
 				{
@@ -466,19 +550,100 @@ void HardpolyRenderer::CompileShaders()
 					float lightscale = clamp((shade - min(24.0, vis)), 0.0, 31.0);
 					return int(lightscale);
 				}
+
+				int SampleFg()
+				{
+					return int(texture(DiffuseTexture, UV).r * 255.0 + 0.5);
+				}
+
+				vec4 LightShadePal(int fg)
+				{
+					return texelFetch(BasecolormapTexture, ivec2(fg, SoftwareLightPal()), 0);
+				}
+
+				int Translate(int fg)
+				{
+					return int(texelFetch(TranslationTexture, ivec2(fg, 0), 0).r * 255.0 + 0.5);
+				}
+
+				int FillColorPal()
+				{
+					return int(FillColor.a);
+				}
+
+				void TextureSampler()
+				{
+					int fg = SampleFg();
+					if (fg == 0) discard;
+					FragColor = LightShadePal(fg);
+					FragColor.rgb *= FragColor.a;
+				}
+
+				void TranslatedSampler()
+				{
+					int fg = SampleFg();
+					if (fg == 0) discard;
+
+					FragColor = LightShadePal(Translate(fg));
+					FragColor.rgb *= FragColor.a;
+				}
+
+				void ShadedSampler()
+				{
+					FragColor = LightShadePal(FillColorPal()) * texture(DiffuseTexture, UV).r;
+				}
+
+				void StencilSampler()
+				{
+					float alpha = (SampleFg() != 0) ? 1.0 : 0.0;
+					FragColor = LightShadePal(FillColorPal()) * alpha;
+				}
+
+				void FillSampler()
+				{
+					FragColor = LightShadePal(FillColorPal());
+				}
+
+				void SkycapSampler()
+				{
+					vec4 capcolor = LightShadePal(FillColorPal());
+
+					int fg = SampleFg();
+					vec4 skycolor = LightShadePal(fg);
+
+					FragColor = skycolor;
+				}
+
+				void FuzzSampler()
+				{
+					float alpha = (SampleFg() != 0) ? 1.0 : 0.0;
+					FragColor = LightShadePal(FillColorPal()) * alpha;
+				}
+
+				void FogBoundarySampler()
+				{
+					FragColor = LightShadePal(FillColorPal());
+				}
 				
 				void main()
 				{
-					int fg = int(texture(DiffuseTexture, UV).r * 255.0 + 0.5);
-					if (fg == 0) discard;
-					FragAlbedo = texelFetch(BasecolormapTexture, ivec2(fg, SoftwareLightPal()), 0);
+					switch (Mode)
+					{
+					case 0: TextureSampler(); break;
+					case 1: TranslatedSampler(); break;
+					case 2: ShadedSampler(); break;
+					case 3: StencilSampler(); break;
+					case 4: FillSampler(); break;
+					case 5: SkycapSampler(); break;
+					case 6: FuzzSampler(); break;
+					case 7: FogBoundarySampler(); break;
+					}
 				}
 			)");
 
 		mOpaqueProgram->SetAttribLocation("Position", 0);
 		mOpaqueProgram->SetAttribLocation("UV", 1);
-		mOpaqueProgram->SetFragOutput("FragAlbedo", 0);
-		mOpaqueProgram->SetFragOutput("FragNormal", 1);
+		mOpaqueProgram->SetFragOutput("FragColor", 0);
 		mOpaqueProgram->Link("program");
 		mOpaqueProgram->SetUniformBlock("FrameUniforms", 0);
 		mOpaqueProgram->SetUniformBlock("FaceUniforms", 1);
@@ -518,7 +683,7 @@ void HardpolyRenderer::CompileShaders()
 				};
 
 				in vec2 UV;
-				out vec4 FragAlbedo;
+				out vec4 FragColor;
 				uniform sampler2D DiffuseTexture;
 				uniform sampler2D BasecolormapTexture;
 				
@@ -527,14 +692,13 @@ void HardpolyRenderer::CompileShaders()
 					int shade = 31 - int(Light * 31.0 / 255.0 + 0.5);
 					int fg = int(texture(DiffuseTexture, UV).r * 255.0 + 0.5);
 					if (fg == 0) discard;
-					FragAlbedo = texelFetch(BasecolormapTexture, ivec2(fg, shade), 0);
+					FragColor = texelFetch(BasecolormapTexture, ivec2(fg, shade), 0);
 				}
 			)");
 
 		mRectProgram->SetAttribLocation("Position", 0);
 		mRectProgram->SetAttribLocation("UV", 1);
-		mRectProgram->SetFragOutput("FragAlbedo", 0);
-		mRectProgram->SetFragOutput("FragNormal", 1);
+		mRectProgram->SetFragOutput("FragColor", 0);
 		mRectProgram->Link("program");
 		mRectProgram->SetUniformBlock("FrameUniforms", 0);
 		mRectProgram->SetUniformBlock("RectUniforms", 1);
@@ -561,18 +725,163 @@ void HardpolyRenderer::CompileShaders()
 				}
 			)");
 		mStencilProgram->Compile(GPUShaderType::Fragment, "fragment", R"(
-				out vec4 FragAlbedo;
+				out vec4 FragColor;
 				void main()
 				{
-					FragAlbedo = vec4(1.0);
+					FragColor = vec4(1.0);
 				}
 			)");
 
 		mStencilProgram->SetAttribLocation("Position", 0);
-		mStencilProgram->SetFragOutput("FragAlbedo", 0);
+		mStencilProgram->SetFragOutput("FragColor", 0);
 		mStencilProgram->SetFragOutput("FragNormal", 1);
 		mStencilProgram->Link("program");
 	}
+}
+
+int HardpolyRenderer::GetSamplerMode(TriBlendMode triblend)
+{
+	enum { Texture, Translated, Shaded, Stencil, Fill, Skycap, Fuzz, FogBoundary };
+	static int modes[] =
+	{
+		Texture,         // TextureOpaque
+		Texture,         // TextureMasked
+		Texture,         // TextureAdd
+		Texture,         // TextureSub
+		Texture,         // TextureRevSub
+		Texture,         // TextureAddSrcColor
+		Translated,      // TranslatedOpaque
+		Translated,      // TranslatedMasked
+		Translated,      // TranslatedAdd
+		Translated,      // TranslatedSub
+		Translated,      // TranslatedRevSub
+		Translated,      // TranslatedAddSrcColor
+		Shaded,          // Shaded
+		Shaded,          // AddShaded
+		Stencil,         // Stencil
+		Stencil,         // AddStencil
+		Fill,            // FillOpaque
+		Fill,            // FillAdd
+		Fill,            // FillSub
+		Fill,            // FillRevSub
+		Fill,            // FillAddSrcColor
+		Skycap,          // Skycap
+		Fuzz,            // Fuzz
+		FogBoundary,     // FogBoundary
+	};
+	return modes[(int)triblend];
+}
+
+HardpolyRenderer::BlendSetterFunc HardpolyRenderer::GetBlendSetter(TriBlendMode triblend)
+{
+	static BlendSetterFunc blendsetters[] =
+	{
+		&HardpolyRenderer::SetOpaqueBlend,         // TextureOpaque
+		&HardpolyRenderer::SetMaskedBlend,         // TextureMasked
+		&HardpolyRenderer::SetAddClampBlend,       // TextureAdd
+		&HardpolyRenderer::SetSubClampBlend,       // TextureSub
+		&HardpolyRenderer::SetRevSubClampBlend,    // TextureRevSub
+		&HardpolyRenderer::SetAddSrcColorBlend,    // TextureAddSrcColor
+		&HardpolyRenderer::SetOpaqueBlend,         // TranslatedOpaque
+		&HardpolyRenderer::SetMaskedBlend,         // TranslatedMasked
+		&HardpolyRenderer::SetAddClampBlend,       // TranslatedAdd
+		&HardpolyRenderer::SetSubClampBlend,       // TranslatedSub
+		&HardpolyRenderer::SetRevSubClampBlend,    // TranslatedRevSub
+		&HardpolyRenderer::SetAddSrcColorBlend,    // TranslatedAddSrcColor
+		&HardpolyRenderer::SetShadedBlend,         // Shaded
+		&HardpolyRenderer::SetAddClampShadedBlend, // AddShaded
+		&HardpolyRenderer::SetShadedBlend,         // Stencil
+		&HardpolyRenderer::SetAddClampShadedBlend, // AddStencil
+		&HardpolyRenderer::SetOpaqueBlend,         // FillOpaque
+		&HardpolyRenderer::SetAddClampBlend,       // FillAdd
+		&HardpolyRenderer::SetSubClampBlend,       // FillSub
+		&HardpolyRenderer::SetRevSubClampBlend,    // FillRevSub
+		&HardpolyRenderer::SetAddSrcColorBlend,    // FillAddSrcColor
+		&HardpolyRenderer::SetOpaqueBlend,         // Skycap
+		&HardpolyRenderer::SetShadedBlend,         // Fuzz
+		&HardpolyRenderer::SetOpaqueBlend          // FogBoundary
+	};
+	return blendsetters[(int)triblend];
+}
+
+void HardpolyRenderer::SetOpaqueBlend(int srcalpha, int destalpha)
+{
+	glDisable(GL_BLEND);
+	glBlendEquation(GL_FUNC_ADD);
+	glBlendFunc(GL_ONE, GL_ZERO);
+}
+
+void HardpolyRenderer::SetMaskedBlend(int srcalpha, int destalpha)
+{
+	glEnable(GL_BLEND);
+	glBlendEquation(GL_FUNC_ADD);
+	glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+}
+
+void HardpolyRenderer::SetAlphaBlendFunc(int srcalpha, int destalpha)
+{
+	int srcblend;
+	if (srcalpha == 0.0f)
+		srcblend = GL_ZERO;
+	else if (srcalpha == 1.0f)
+		srcblend = GL_ONE;
+	else
+		srcblend = GL_CONSTANT_ALPHA;
+
+	int destblend;
+	if (destalpha == 0.0f)
+		destblend = GL_ZERO;
+	else if (destalpha == 1.0f)
+		destblend = GL_ONE;
+	else if (srcalpha + destalpha >= 255)
+		destblend = GL_ONE_MINUS_CONSTANT_ALPHA;
+	else
+		destblend = GL_CONSTANT_COLOR;
+
+	glBlendColor(destalpha / 256.0f, destalpha / 256.0f, destalpha / 256.0f, srcalpha / 256.0f);
+	glBlendFunc(srcblend, destblend);
+}
+
+void HardpolyRenderer::SetAddClampBlend(int srcalpha, int destalpha)
+{
+	glEnable(GL_BLEND);
+	glBlendEquation(GL_FUNC_ADD);
+	SetAlphaBlendFunc(srcalpha, destalpha);
+}
+
+void HardpolyRenderer::SetSubClampBlend(int srcalpha, int destalpha)
+{
+	glEnable(GL_BLEND);
+	glBlendEquation(GL_FUNC_SUBTRACT);
+	SetAlphaBlendFunc(srcalpha, destalpha);
+}
+
+void HardpolyRenderer::SetRevSubClampBlend(int srcalpha, int destalpha)
+{
+	glEnable(GL_BLEND);
+	glBlendEquation(GL_FUNC_REVERSE_SUBTRACT);
+	SetAlphaBlendFunc(srcalpha, destalpha);
+}
+
+void HardpolyRenderer::SetAddSrcColorBlend(int srcalpha, int destalpha)
+{
+	glEnable(GL_BLEND);
+	glBlendEquation(GL_FUNC_ADD);
+	glBlendFunc(GL_SRC_COLOR, GL_ONE_MINUS_SRC_COLOR);
+}
+
+void HardpolyRenderer::SetShadedBlend(int srcalpha, int destalpha)
+{
+	glEnable(GL_BLEND);
+	glBlendEquation(GL_FUNC_ADD);
+	glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+}
+
+void HardpolyRenderer::SetAddClampShadedBlend(int srcalpha, int destalpha)
+{
+	glEnable(GL_BLEND);
+	glBlendEquation(GL_FUNC_ADD);
+	glBlendFunc(GL_ONE, GL_ONE);
 }
 
 /////////////////////////////////////////////////////////////////////////////
