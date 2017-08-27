@@ -611,7 +611,12 @@ void HardpolyRenderer::CompileShaders()
 					int fg = SampleFg();
 					vec4 skycolor = LightShadePal(fg);
 
-					FragColor = skycolor;
+					float startFade = 4.0; // How fast it should fade out
+					float alphaTop = clamp(UV.y * startFade, 0.0, 1.0);
+					float alphaBottom = clamp((2.0 - UV.y) * startFade, 0.0, 1.0);
+					float alpha = min(alphaTop, alphaBottom);
+
+					FragColor = mix(capcolor, skycolor, alpha);
 				}
 
 				void FuzzSampler()
