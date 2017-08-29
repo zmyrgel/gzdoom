@@ -38,14 +38,6 @@
 #include "swrenderer/viewport/r_viewport.h"
 #include "polyrenderer/hardpoly/hardpolyrenderer.h"
 
-void PolyDrawArgs::SetClipPlane(const PolyClipPlane &plane)
-{
-	mClipPlane[0] = plane.A;
-	mClipPlane[1] = plane.B;
-	mClipPlane[2] = plane.C;
-	mClipPlane[3] = plane.D;
-}
-
 void PolyDrawArgs::SetTexture(const uint8_t *texels, int width, int height)
 {
 	mTexture = nullptr;
