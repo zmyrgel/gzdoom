@@ -44,6 +44,9 @@ struct FaceUniforms
 	int Mode;
 	int Padding3;
 	Vec4f FillColor;
+	Vec4f ClipPlane0;
+	Vec4f ClipPlane1;
+	Vec4f ClipPlane2;
 };
 
 struct RectUniforms

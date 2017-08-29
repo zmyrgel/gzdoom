@@ -115,6 +115,9 @@ void HardpolyRenderer::DrawArray(const PolyDrawArgs &drawargs)
 	run.Uniforms.FillColor.Y = GPART(drawargs.Color()) / 255.0f;
 	run.Uniforms.FillColor.Z = BPART(drawargs.Color()) / 255.0f;
 	run.Uniforms.FillColor.W = drawargs.Color();
+	run.Uniforms.ClipPlane0 = { drawargs.ClipPlane(0).A, drawargs.ClipPlane(0).B, drawargs.ClipPlane(0).C, drawargs.ClipPlane(0).D };
+	run.Uniforms.ClipPlane1 = { drawargs.ClipPlane(1).A, drawargs.ClipPlane(1).B, drawargs.ClipPlane(1).C, drawargs.ClipPlane(1).D };
+	run.Uniforms.ClipPlane2 = { drawargs.ClipPlane(2).A, drawargs.ClipPlane(2).B, drawargs.ClipPlane(2).C, drawargs.ClipPlane(2).D };
 	run.BlendMode = drawargs.BlendMode();
 	run.SrcAlpha = drawargs.SrcAlpha();
 	run.DestAlpha = drawargs.DestAlpha();
@@ -250,6 +253,10 @@ void HardpolyRenderer::RenderBatch(DrawBatch *batch)
 	//glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
 	//glStencilFunc(GL_ALWAYS, 1, 0xffffffff);
 
+	glEnable(GL_CLIP_DISTANCE0);
+	glEnable(GL_CLIP_DISTANCE1);
+	glEnable(GL_CLIP_DISTANCE2);
+
 	mContext->SetSampler(0, mSamplerNearest);
 	mContext->SetSampler(1, mSamplerNearest);
 	mContext->SetSampler(2, mSamplerNearest);
@@ -292,6 +299,10 @@ void HardpolyRenderer::RenderBatch(DrawBatch *batch)
 	mContext->SetSampler(0, nullptr);
 	mContext->SetSampler(1, nullptr);
 	mContext->SetSampler(2, nullptr);
+
+	glDisable(GL_CLIP_DISTANCE0);
+	glDisable(GL_CLIP_DISTANCE1);
+	glDisable(GL_CLIP_DISTANCE2);
 
 	//glDisable(GL_STENCIL_TEST);
 
@@ -492,6 +503,18 @@ void HardpolyRenderer::CompileShaders()
 					float GlobVis;
 				};
 
+				layout(std140) uniform FaceUniforms
+				{
+					float Light;
+					float AlphaTest;
+					int Mode;
+					int Padding;
+					vec4 FillColor;
+					vec4 ClipPlane0;
+					vec4 ClipPlane1;
+					vec4 ClipPlane2;
+				};
+
 				in vec4 Position;
 				in vec4 Texcoord;
 				out vec2 UV;
@@ -502,6 +525,9 @@ void HardpolyRenderer::CompileShaders()
 					vec4 posInView = WorldToView * vec4(Position.xyz, 1.0);
 					PositionInView = posInView.xyz;
 					gl_Position = ViewToProjection * posInView;
+					gl_ClipDistance[0] = dot(ClipPlane0, vec4(Position.xyz, 1.0));
+					gl_ClipDistance[1] = dot(ClipPlane1, vec4(Position.xyz, 1.0));
+					gl_ClipDistance[2] = dot(ClipPlane2, vec4(Position.xyz, 1.0));
 
 					UV = Texcoord.xy;
 				}
@@ -521,6 +547,9 @@ void HardpolyRenderer::CompileShaders()
 					int Mode;
 					int Padding;
 					vec4 FillColor;
+					vec4 ClipPlane0;
+					vec4 ClipPlane1;
+					vec4 ClipPlane2;
 				};
 
 				in vec2 UV;
