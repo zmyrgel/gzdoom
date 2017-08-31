@@ -568,7 +568,7 @@ void HardpolyRenderer::CompileShaders()
 					return 1.0 - lightscale;
 				}
 
-				int SoftwareLightPal()
+				float SoftwareLightPal()
 				{
 					if (Light < 0)
 						return 31 - int((-1.0 - Light) * 31.0 / 255.0 + 0.5);
@@ -577,7 +577,7 @@ void HardpolyRenderer::CompileShaders()
 					float vis = GlobVis / z;
 					float shade = 64.0 - (Light + 12.0) * 32.0/128.0;
 					float lightscale = clamp((shade - min(24.0, vis)), 0.0, 31.0);
-					return int(lightscale);
+					return lightscale;
 				}
 
 				int SampleFg()
@@ -587,7 +587,17 @@ void HardpolyRenderer::CompileShaders()
 
 				vec4 LightShadePal(int fg)
 				{
-					return texelFetch(BasecolormapTexture, ivec2(fg, SoftwareLightPal()), 0);
+					float light = max(SoftwareLightPal() - 0.5, 0.0);
+					float t = fract(light);
+					int index0 = int(light);
+					int index1 = min(index0 + 1, 31);
+					vec4 color0 = texelFetch(BasecolormapTexture, ivec2(fg, index0), 0);
+					vec4 color1 = texelFetch(BasecolormapTexture, ivec2(fg, index1), 0);
+					color0.rgb = pow(color0.rgb, vec3(2.2));
+					color1.rgb = pow(color1.rgb, vec3(2.2));
+					vec4 mixcolor = mix(color0, color1, t);
+					mixcolor.rgb = pow(mixcolor.rgb, vec3(1.0/2.2));
+					return mixcolor;
 				}
 
 				int Translate(int fg)
