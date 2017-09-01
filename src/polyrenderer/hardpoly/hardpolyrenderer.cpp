@@ -227,15 +227,32 @@ void HardpolyRenderer::RenderBatch(DrawBatch *batch)
 {
 	UpdateFrameUniforms();
 
-	if (!mFaceUniforms)
+	GLint uniformBufferAlignSize = 0;
+	//GLint uniformBufferMinSize = 0;
+	glGetIntegerv(GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT, &uniformBufferAlignSize);
+	//glGetIntegerv(GL_UNIFORM_BLOCK_SIZE_DATA, &uniformBufferMinSize);
+
+	size_t blockSize = (sizeof(FaceUniforms) + uniformBufferAlignSize - 1) / uniformBufferAlignSize * uniformBufferAlignSize;
+
+	if (!batch->FaceUniforms)
 	{
-		mFaceUniforms = std::make_shared<GPUUniformBuffer>(nullptr, (int)sizeof(FaceUniforms));
+		batch->FaceUniforms = std::make_shared<GPUUniformBuffer>(nullptr, (int)blockSize * 4 * 1024);
 	}
+
+	static std::vector<uint8_t> uploadBuffer;
+	uploadBuffer.resize(blockSize * 4 * 1024);
+	int uniformCount = 0;
+	for (const auto &run : batch->DrawRuns)
+	{
+		memcpy(uploadBuffer.data() + uniformCount * blockSize, &run.Uniforms, sizeof(FaceUniforms));
+		uniformCount++;
+	}
+	if (uniformCount > 0)
+		batch->FaceUniforms->Upload(uploadBuffer.data(), (int)blockSize * uniformCount);
 
 	mContext->SetVertexArray(batch->VertexArray);
 	mContext->SetProgram(mOpaqueProgram);
 	mContext->SetUniforms(0, mFrameUniforms[mCurrentFrameUniforms]);
-	mContext->SetUniforms(1, mFaceUniforms);
 
 	int loc = glGetUniformLocation(mOpaqueProgram->Handle(), "DiffuseTexture");
 	if (loc != -1)
@@ -260,9 +277,10 @@ void HardpolyRenderer::RenderBatch(DrawBatch *batch)
 	mContext->SetSampler(0, mSamplerNearest);
 	mContext->SetSampler(1, mSamplerNearest);
 	mContext->SetSampler(2, mSamplerNearest);
+	int index = 0;
 	for (const auto &run : batch->DrawRuns)
 	{
-		mFaceUniforms->Upload(&run.Uniforms, (int)sizeof(FaceUniforms));
+		mContext->SetUniforms(1, batch->FaceUniforms, index * blockSize, blockSize);
 
 		//glDepthFunc(run.DepthTest ? GL_LESS : GL_ALWAYS);
 		//glDepthMask(run.WriteDepth ? GL_TRUE : GL_FALSE);
@@ -292,6 +310,8 @@ void HardpolyRenderer::RenderBatch(DrawBatch *batch)
 			mContext->Draw(GPUDrawMode::TriangleFan, run.Start, run.NumVertices);
 			break;
 		}
+
+		index++;
 	}
 	mContext->SetTexture(0, nullptr);
 	mContext->SetTexture(1, nullptr);

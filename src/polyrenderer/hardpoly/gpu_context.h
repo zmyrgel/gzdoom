@@ -346,6 +346,7 @@ public:
 	void SetSampler(int index, const std::shared_ptr<GPUSampler> &sampler);
 	void SetTexture(int index, const std::shared_ptr<GPUTexture> &texture);
 	void SetUniforms(int index, const std::shared_ptr<GPUUniformBuffer> &buffer);
+	void SetUniforms(int index, const std::shared_ptr<GPUUniformBuffer> &buffer, ptrdiff_t offset, size_t size);
 	void SetStorage(int index, const std::shared_ptr<GPUStorageBuffer> &storage);
 
 	void SetVertexArray(const std::shared_ptr<GPUVertexArray> &vertexarray);

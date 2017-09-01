@@ -80,6 +80,7 @@ struct DrawBatch
 {
 	std::shared_ptr<GPUVertexArray> VertexArray;
 	std::shared_ptr<GPUVertexBuffer> Vertices;
+	std::shared_ptr<GPUUniformBuffer> FaceUniforms;
 	std::vector<DrawRun> DrawRuns;
 };
 
@@ -148,7 +149,6 @@ private:
 	int mCurrentFrameUniforms = 0;
 	bool mFrameUniformsDirty = true;
 
-	std::shared_ptr<GPUUniformBuffer> mFaceUniforms;
 	std::shared_ptr<GPUUniformBuffer> mRectUniforms;
 
 	std::shared_ptr<GPUVertexArray> mVertexArray;

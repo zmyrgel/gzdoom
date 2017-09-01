@@ -131,6 +131,14 @@ void GPUContext::SetUniforms(int index, const std::shared_ptr<GPUUniformBuffer> 
 		glBindBufferBase(GL_UNIFORM_BUFFER, index, 0);
 }
 
+void GPUContext::SetUniforms(int index, const std::shared_ptr<GPUUniformBuffer> &buffer, ptrdiff_t offset, size_t size)
+{
+	if (buffer)
+		glBindBufferRange(GL_UNIFORM_BUFFER, index, buffer->Handle(), offset, size);
+	else
+		glBindBufferBase(GL_UNIFORM_BUFFER, index, 0);
+}
+
 void GPUContext::SetStorage(int index, const std::shared_ptr<GPUStorageBuffer> &storage)
 {
 	if (storage)
@@ -681,7 +689,7 @@ GPUUniformBuffer::GPUUniformBuffer(const void *data, int size)
 	glGetIntegerv(GL_UNIFORM_BUFFER_BINDING, &oldHandle);
 
 	glBindBuffer(GL_UNIFORM_BUFFER, mHandle);
-	glBufferData(GL_UNIFORM_BUFFER, size, data, GL_STATIC_DRAW);
+	glBufferData(GL_UNIFORM_BUFFER, size, data, GL_STREAM_DRAW);
 
 	glBindBuffer(GL_UNIFORM_BUFFER, oldHandle);
 }
@@ -692,7 +700,7 @@ void GPUUniformBuffer::Upload(const void *data, int size)
 	glGetIntegerv(GL_UNIFORM_BUFFER_BINDING, &oldHandle);
 
 	glBindBuffer(GL_UNIFORM_BUFFER, mHandle);
-	glBufferData(GL_UNIFORM_BUFFER, size, data, GL_STATIC_DRAW);
+	glBufferData(GL_UNIFORM_BUFFER, size, data, GL_STREAM_DRAW);
 
 	glBindBuffer(GL_UNIFORM_BUFFER, oldHandle);
 }
