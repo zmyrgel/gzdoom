@@ -27,6 +27,8 @@
 struct subsector_t;
 struct particle_t;
 class PolyDrawArgs;
+class PolyRenderThread;
+class HardpolyRenderer;
 class DCanvas;
 
 struct FrameUniforms
@@ -82,13 +84,17 @@ struct DrawBatch
 	std::shared_ptr<GPUVertexBuffer> Vertices;
 	std::shared_ptr<GPUUniformBuffer> FaceUniforms;
 	std::vector<DrawRun> DrawRuns;
+
+	std::vector<TriVertex> CpuVertices;
 };
 
 class DrawBatcher
 {
 public:
-	void GetVertices(HardpolyRenderer *hardpoly, int numVertices);
-	void Flush(HardpolyRenderer *hardpoly);
+	void GetVertices(int numVertices);
+	void Flush();
+
+	void DrawBatches(HardpolyRenderer *hardpoly);
 	void NextFrame();
 
 	TriVertex *mVertices = nullptr;
@@ -100,6 +106,7 @@ private:
 
 	std::vector<std::unique_ptr<DrawBatch>> mCurrentFrameBatches;
 	std::vector<std::unique_ptr<DrawBatch>> mLastFrameBatches;
+	size_t mDrawStart = 0;
 	size_t mNextBatch = 0;
 };
 
@@ -112,7 +119,7 @@ public:
 	void Begin();
 	void ClearBuffers(DCanvas *canvas);
 	void SetViewport(int x, int y, int width, int height, DCanvas *canvas);
-	void DrawArray(const PolyDrawArgs &args);
+	void DrawArray(PolyRenderThread *thread, const PolyDrawArgs &args);
 	void DrawRect(const RectDrawArgs &args);
 	void End();
 
@@ -126,8 +133,6 @@ private:
 	void CompileShaders();
 	void CreateSamplers();
 	void UpdateFrameUniforms();
-
-	DrawBatcher mDrawBatcher;
 
 	std::shared_ptr<GPUTexture2D> GetTexturePal(FTexture *texture);
 	std::shared_ptr<GPUTexture2D> GetTextureBgra(FTexture *texture);

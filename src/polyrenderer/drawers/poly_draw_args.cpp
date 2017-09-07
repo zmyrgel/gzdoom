@@ -137,7 +137,7 @@ void PolyDrawArgs::DrawArray(PolyRenderThread *thread, const TriVertex *vertices
 	mVertexCount = vcount;
 	mDrawMode = mode;
 	if (PolyRenderer::Instance()->RedirectToHardpoly)
-		PolyRenderer::Instance()->Hardpoly->DrawArray(*this);
+		PolyRenderer::Instance()->Hardpoly->DrawArray(thread, *this);
 	else
 		thread->DrawQueue->Push<DrawPolyTrianglesCommand>(*this, PolyTriangleDrawer::is_mirror());
 }

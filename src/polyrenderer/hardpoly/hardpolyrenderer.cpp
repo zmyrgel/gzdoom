@@ -55,12 +55,20 @@ void HardpolyRenderer::Begin()
 	SetupFramebuffer();
 	CompileShaders();
 	CreateSamplers();
-	mDrawBatcher.NextFrame();
+	for (auto &thread : PolyRenderer::Instance()->Threads.Threads)
+	{
+		thread->DrawBatcher.NextFrame();
+	}
 }
 
 void HardpolyRenderer::End()
 {
-	mDrawBatcher.Flush(this);
+	for (auto &thread : PolyRenderer::Instance()->Threads.Threads)
+	{
+		thread->DrawBatcher.DrawBatches(this);
+		thread->DrawBatcher.NextFrame();
+	}
+
 	mContext->SetViewport(0, 0, screen->GetWidth(), screen->GetHeight());
 	mContext->End();
 
@@ -70,7 +78,11 @@ void HardpolyRenderer::End()
 
 void HardpolyRenderer::ClearBuffers(DCanvas *canvas)
 {
-	mDrawBatcher.Flush(this);
+	for (auto &thread : PolyRenderer::Instance()->Threads.Threads)
+	{
+		thread->DrawBatcher.DrawBatches(this);
+	}
+
 	mContext->ClearColorBuffer(0, 0.5f, 0.5f, 0.2f, 1.0f);
 	mContext->ClearColorBuffer(1, 0.0f, 0.0f, 0.0f, 0.0f);
 	mContext->ClearColorBuffer(2, 1.0f, 0.0f, 0.0f, 0.0f);
@@ -79,11 +91,15 @@ void HardpolyRenderer::ClearBuffers(DCanvas *canvas)
 
 void HardpolyRenderer::SetViewport(int x, int y, int width, int height, DCanvas *canvas)
 {
-	mDrawBatcher.Flush(this);
+	for (auto &thread : PolyRenderer::Instance()->Threads.Threads)
+	{
+		thread->DrawBatcher.DrawBatches(this);
+	}
+
 	mContext->SetViewport(x, y, width, height);
 }
 
-void HardpolyRenderer::DrawArray(const PolyDrawArgs &drawargs)
+void HardpolyRenderer::DrawArray(PolyRenderThread *thread, const PolyDrawArgs &drawargs)
 {
 	if (!drawargs.WriteColor())
 		return;
@@ -93,7 +109,7 @@ void HardpolyRenderer::DrawArray(const PolyDrawArgs &drawargs)
 	if (vcount < 3)
 		return;
 
-	mDrawBatcher.GetVertices(this, vcount);
+	thread->DrawBatcher.GetVertices(vcount);
 
 	DrawRun run;
 	run.Texture = drawargs.Texture();
@@ -123,12 +139,12 @@ void HardpolyRenderer::DrawArray(const PolyDrawArgs &drawargs)
 	run.DestAlpha = drawargs.DestAlpha();
 	run.DepthTest = drawargs.DepthTest();
 	run.WriteDepth = drawargs.WriteDepth();
-	run.Start = mDrawBatcher.mNextVertex;
+	run.Start = thread->DrawBatcher.mNextVertex;
 	run.NumVertices = vcount;
 
-	memcpy(mDrawBatcher.mVertices + mDrawBatcher.mNextVertex, drawargs.Vertices(), sizeof(TriVertex) * vcount);
-	mDrawBatcher.mNextVertex += run.NumVertices;
-	mDrawBatcher.mCurrentBatch->DrawRuns.push_back(run);
+	memcpy(thread->DrawBatcher.mVertices + thread->DrawBatcher.mNextVertex, drawargs.Vertices(), sizeof(TriVertex) * vcount);
+	thread->DrawBatcher.mNextVertex += run.NumVertices;
+	thread->DrawBatcher.mCurrentBatch->DrawRuns.push_back(run);
 }
 
 void HardpolyRenderer::UpdateFrameUniforms()
@@ -950,11 +966,44 @@ void HardpolyRenderer::SetAddClampShadedBlend(int srcalpha, int destalpha)
 
 /////////////////////////////////////////////////////////////////////////////
 
-void DrawBatcher::GetVertices(HardpolyRenderer *hardpoly, int numVertices)
+void DrawBatcher::DrawBatches(HardpolyRenderer *hardpoly)
+{
+	Flush();
+
+	for (size_t i = mDrawStart; i < mNextBatch; i++)
+	{
+		DrawBatch *current = mCurrentFrameBatches[i].get();
+		if (current->DrawRuns.empty())
+			continue;
+
+		if (!current->Vertices)
+		{
+			current->Vertices = std::make_shared<GPUVertexBuffer>(nullptr, MaxVertices * (int)sizeof(TriVertex));
+
+			std::vector<GPUVertexAttributeDesc> attributes =
+			{
+				{ 0, 4, GPUVertexAttributeType::Float, false, sizeof(TriVertex), offsetof(TriVertex, x), current->Vertices },
+				{ 1, 2, GPUVertexAttributeType::Float, false, sizeof(TriVertex), offsetof(TriVertex, u), current->Vertices }
+			};
+
+			current->VertexArray = std::make_shared<GPUVertexArray>(attributes);
+		}
+
+		TriVertex *gpuVertices = (TriVertex*)current->Vertices->MapWriteOnly();
+		memcpy(gpuVertices, current->CpuVertices.data(), sizeof(TriVertex) * current->CpuVertices.size());
+		current->Vertices->Unmap();
+
+		hardpoly->RenderBatch(current);
+	}
+
+	mDrawStart = mNextBatch;
+}
+
+void DrawBatcher::GetVertices(int numVertices)
 {
 	if (mNextVertex + numVertices > MaxVertices)
 	{
-		Flush(hardpoly);
+		Flush();
 	}
 
 	if (!mVertices)
@@ -967,38 +1016,14 @@ void DrawBatcher::GetVertices(HardpolyRenderer *hardpoly, int numVertices)
 
 		mCurrentBatch = mCurrentFrameBatches[mNextBatch++].get();
 		mCurrentBatch->DrawRuns.clear();
-
-		if (!mCurrentBatch->Vertices)
-		{
-			mCurrentBatch->Vertices = std::make_shared<GPUVertexBuffer>(nullptr, MaxVertices * (int)sizeof(TriVertex));
-
-			std::vector<GPUVertexAttributeDesc> attributes =
-			{
-				{ 0, 4, GPUVertexAttributeType::Float, false, sizeof(TriVertex), offsetof(TriVertex, x), mCurrentBatch->Vertices },
-				{ 1, 2, GPUVertexAttributeType::Float, false, sizeof(TriVertex), offsetof(TriVertex, u), mCurrentBatch->Vertices }
-			};
-
-			mCurrentBatch->VertexArray = std::make_shared<GPUVertexArray>(attributes);
-		}
-
-		mVertices = (TriVertex*)mCurrentBatch->Vertices->MapWriteOnly();
+		mCurrentBatch->CpuVertices.resize(MaxVertices);
+		mVertices = mCurrentBatch->CpuVertices.data();
 	}
 }
 
-void DrawBatcher::Flush(HardpolyRenderer *hardpoly)
+void DrawBatcher::Flush()
 {
-	if (mVertices)
-	{
-		mCurrentBatch->Vertices->Unmap();
-		mVertices = nullptr;
-	}
-
-	if (mCurrentBatch)
-	{
-		if (!mCurrentBatch->DrawRuns.empty())
-			hardpoly->RenderBatch(mCurrentBatch);
-	}
-
+	mVertices = nullptr;
 	mNextVertex = 0;
 	mCurrentBatch = nullptr;
 }
@@ -1007,4 +1032,5 @@ void DrawBatcher::NextFrame()
 {
 	mCurrentFrameBatches.swap(mLastFrameBatches);
 	mNextBatch = 0;
+	mDrawStart = 0;
 }

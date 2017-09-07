@@ -25,6 +25,7 @@
 #include <memory>
 #include <thread>
 #include "swrenderer/r_memory.h"
+#include "polyrenderer/hardpoly/hardpolyrenderer.h"
 
 class DrawerCommandQueue;
 typedef std::shared_ptr<DrawerCommandQueue> DrawerCommandQueuePtr;
@@ -44,6 +45,7 @@ public:
 
 	std::unique_ptr<RenderMemory> FrameMemory;
 	DrawerCommandQueuePtr DrawQueue;
+	DrawBatcher DrawBatcher;
 
 	std::vector<PolyTranslucentObject *> TranslucentObjects;
 
@@ -75,6 +77,8 @@ public:
 
 	PolyRenderThread *MainThread() { return Threads.front().get(); }
 
+	std::vector<std::unique_ptr<PolyRenderThread>> Threads;
+
 private:
 	void RenderThreadSlice(PolyRenderThread *thread);
 
@@ -83,7 +87,6 @@ private:
 
 	std::function<void(PolyRenderThread *)> WorkerCallback;
 
-	std::vector<std::unique_ptr<PolyRenderThread>> Threads;
 	std::mutex start_mutex;
 	std::condition_variable start_condition;
 	bool shutdown_flag = false;
