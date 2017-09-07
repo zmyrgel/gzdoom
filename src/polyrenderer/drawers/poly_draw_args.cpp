@@ -1,5 +1,5 @@
 /*
-**  Triangle drawers
+**  Polygon Doom software renderer
 **  Copyright (c) 2016 Magnus Norddahl
 **
 **  This software is provided 'as-is', without any express or implied
@@ -37,6 +37,7 @@
 #include "poly_draw_args.h"
 #include "swrenderer/viewport/r_viewport.h"
 #include "polyrenderer/hardpoly/hardpolyrenderer.h"
+#include "polyrenderer/poly_renderthread.h"
 
 void PolyDrawArgs::SetTexture(const uint8_t *texels, int width, int height)
 {
@@ -130,7 +131,7 @@ void PolyDrawArgs::SetColor(uint32_t bgra, uint8_t palindex)
 	}
 }
 
-void PolyDrawArgs::DrawArray(const TriVertex *vertices, int vcount, PolyDrawMode mode)
+void PolyDrawArgs::DrawArray(PolyRenderThread *thread, const TriVertex *vertices, int vcount, PolyDrawMode mode)
 {
 	mVertices = vertices;
 	mVertexCount = vcount;
@@ -138,7 +139,7 @@ void PolyDrawArgs::DrawArray(const TriVertex *vertices, int vcount, PolyDrawMode
 	if (PolyRenderer::Instance()->RedirectToHardpoly)
 		PolyRenderer::Instance()->Hardpoly->DrawArray(*this);
 	else
-		PolyRenderer::Instance()->DrawQueue->Push<DrawPolyTrianglesCommand>(*this, PolyTriangleDrawer::is_mirror());
+		thread->DrawQueue->Push<DrawPolyTrianglesCommand>(*this, PolyTriangleDrawer::is_mirror());
 }
 
 void PolyDrawArgs::SetStyle(const FRenderStyle &renderstyle, double alpha, uint32_t fillcolor, uint32_t translationID, FTexture *tex, bool fullbright)
@@ -276,7 +277,7 @@ void RectDrawArgs::SetColor(uint32_t bgra, uint8_t palindex)
 	}
 }
 
-void RectDrawArgs::Draw(double x0, double x1, double y0, double y1, double u0, double u1, double v0, double v1)
+void RectDrawArgs::Draw(PolyRenderThread *thread, double x0, double x1, double y0, double y1, double u0, double u1, double v0, double v1)
 {
 	mX0 = (float)x0;
 	mX1 = (float)x1;
@@ -286,10 +287,11 @@ void RectDrawArgs::Draw(double x0, double x1, double y0, double y1, double u0, d
 	mU1 = (float)u1;
 	mV0 = (float)v0;
 	mV1 = (float)v1;
+
 	if (PolyRenderer::Instance()->RedirectToHardpoly)
 		PolyRenderer::Instance()->Hardpoly->DrawRect(*this);
 	else
-		PolyRenderer::Instance()->DrawQueue->Push<DrawRectCommand>(*this);
+		thread->DrawQueue->Push<DrawRectCommand>(*this);
 }
 
 void RectDrawArgs::SetStyle(const FRenderStyle &renderstyle, double alpha, uint32_t fillcolor, uint32_t translationID, FTexture *tex, bool fullbright)

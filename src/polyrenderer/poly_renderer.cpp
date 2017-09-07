@@ -32,6 +32,7 @@
 #include "po_man.h"
 #include "st_stuff.h"
 #include "g_levellocals.h"
+#include "p_effect.h"
 #include "polyrenderer/scene/poly_light.h"
 #include "polyrenderer/hardpoly/hardpolyrenderer.h"
 #include "swrenderer/scene/r_scene.h"
@@ -58,7 +59,6 @@ PolyRenderer *PolyRenderer::Instance()
 
 PolyRenderer::PolyRenderer()
 {
-	DrawQueue = std::make_shared<DrawerCommandQueue>(&FrameMemory);
 }
 
 void PolyRenderer::RenderView(player_t *player)
@@ -100,12 +100,11 @@ void PolyRenderer::RenderView(player_t *player)
 		CameraLight *cameraLight = CameraLight::Instance();
 		if (cameraLight->ShaderColormap() && RenderTarget->IsBgra() && !(r_shadercolormaps && screen->Accel2D))
 		{
-			DrawQueue->Push<ApplySpecialColormapRGBACommand>(cameraLight->ShaderColormap(), screen);
+			Threads.MainThread()->DrawQueue->Push<ApplySpecialColormapRGBACommand>(cameraLight->ShaderColormap(), screen);
 		}
 
-		DrawerThreads::Execute(DrawQueue);
+		Threads.MainThread()->FlushDrawQueue();
 		DrawerThreads::WaitForWorkers();
-		DrawQueue->Clear();
 	}
 }
 
@@ -124,7 +123,7 @@ void PolyRenderer::RenderViewToCanvas(AActor *actor, DCanvas *canvas, int x, int
 	canvas->Lock(true);
 	
 	RenderActorView(actor, dontmaplines);
-	DrawerThreads::Execute(DrawQueue);
+	Threads.MainThread()->FlushDrawQueue();
 	DrawerThreads::WaitForWorkers();
 	
 	canvas->Unlock();
@@ -167,9 +166,9 @@ void PolyRenderer::RenderActorView(AActor *actor, bool dontmaplines)
 	SetupPerspectiveMatrix();
 	MainPortal.SetViewpoint(WorldToClip, PolyClipPlane(0.0f, 0.0f, 0.0f, 1.0f), GetNextStencilValue());
 	MainPortal.Render(0);
-	Skydome.Render(WorldToClip);
+	Skydome.Render(Threads.MainThread(), WorldToClip);
 	MainPortal.RenderTranslucent(0);
-	PlayerSprites.Render();
+	PlayerSprites.Render(Threads.MainThread());
 
 	Viewpoint.camera->renderflags = savedflags;
 	interpolator.RestoreInterpolations ();
@@ -184,7 +183,7 @@ void PolyRenderer::RenderRemainingPlayerSprites()
 
 void PolyRenderer::ClearBuffers()
 {
-	FrameMemory.Clear();
+	Threads.Clear();
 	PolyTriangleDrawer::clear_buffers(RenderTarget);
 	NextStencilValue = 0;
 }
