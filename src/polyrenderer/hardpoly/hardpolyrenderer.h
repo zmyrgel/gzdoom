@@ -70,7 +70,6 @@ struct DrawRun
 	int Start = 0;
 	int NumVertices = 0;
 	PolyDrawMode DrawMode = PolyDrawMode::Triangles;
-	FaceUniforms Uniforms;
 	TriBlendMode BlendMode;
 	uint32_t SrcAlpha = 0;
 	uint32_t DestAlpha = 0;
@@ -86,6 +85,7 @@ struct DrawBatch
 	std::vector<DrawRun> DrawRuns;
 
 	std::vector<TriVertex> CpuVertices;
+	std::vector<::FaceUniforms> CpuFaceUniforms;
 };
 
 class DrawBatcher
@@ -101,9 +101,9 @@ public:
 	int mNextVertex = 0;
 	DrawBatch *mCurrentBatch = nullptr;
 
-private:
-	enum { MaxVertices = 16 * 1024 };
+	enum { MaxVertices = 16 * 1024, MaxFaceUniforms = 200 };
 
+private:
 	std::vector<std::unique_ptr<DrawBatch>> mCurrentFrameBatches;
 	std::vector<std::unique_ptr<DrawBatch>> mLastFrameBatches;
 	size_t mDrawStart = 0;

@@ -122,18 +122,6 @@ void HardpolyRenderer::DrawArray(PolyRenderThread *thread, const PolyDrawArgs &d
 	run.Translation = drawargs.Translation();
 	run.DrawMode = drawargs.DrawMode();
 	run.BaseColormap = drawargs.BaseColormap();
-	run.Uniforms.AlphaTest = 0.5f;
-	run.Uniforms.Light = drawargs.Light();
-	if (drawargs.FixedLight())
-		run.Uniforms.Light = -run.Uniforms.Light - 1;
-	run.Uniforms.Mode = GetSamplerMode(drawargs.BlendMode());
-	run.Uniforms.FillColor.X = RPART(drawargs.Color()) / 255.0f;
-	run.Uniforms.FillColor.Y = GPART(drawargs.Color()) / 255.0f;
-	run.Uniforms.FillColor.Z = BPART(drawargs.Color()) / 255.0f;
-	run.Uniforms.FillColor.W = drawargs.Color();
-	run.Uniforms.ClipPlane0 = { drawargs.ClipPlane(0).A, drawargs.ClipPlane(0).B, drawargs.ClipPlane(0).C, drawargs.ClipPlane(0).D };
-	run.Uniforms.ClipPlane1 = { drawargs.ClipPlane(1).A, drawargs.ClipPlane(1).B, drawargs.ClipPlane(1).C, drawargs.ClipPlane(1).D };
-	run.Uniforms.ClipPlane2 = { drawargs.ClipPlane(2).A, drawargs.ClipPlane(2).B, drawargs.ClipPlane(2).C, drawargs.ClipPlane(2).D };
 	run.BlendMode = drawargs.BlendMode();
 	run.SrcAlpha = drawargs.SrcAlpha();
 	run.DestAlpha = drawargs.DestAlpha();
@@ -142,8 +130,28 @@ void HardpolyRenderer::DrawArray(PolyRenderThread *thread, const PolyDrawArgs &d
 	run.Start = thread->DrawBatcher.mNextVertex;
 	run.NumVertices = vcount;
 
-	memcpy(thread->DrawBatcher.mVertices + thread->DrawBatcher.mNextVertex, drawargs.Vertices(), sizeof(TriVertex) * vcount);
+	FaceUniforms uniforms;
+	uniforms.AlphaTest = 0.5f;
+	uniforms.Light = drawargs.Light();
+	if (drawargs.FixedLight())
+		uniforms.Light = -uniforms.Light - 1;
+	uniforms.Mode = GetSamplerMode(drawargs.BlendMode());
+	uniforms.FillColor.X = RPART(drawargs.Color()) / 255.0f;
+	uniforms.FillColor.Y = GPART(drawargs.Color()) / 255.0f;
+	uniforms.FillColor.Z = BPART(drawargs.Color()) / 255.0f;
+	uniforms.FillColor.W = drawargs.Color();
+	uniforms.ClipPlane0 = { drawargs.ClipPlane(0).A, drawargs.ClipPlane(0).B, drawargs.ClipPlane(0).C, drawargs.ClipPlane(0).D };
+	uniforms.ClipPlane1 = { drawargs.ClipPlane(1).A, drawargs.ClipPlane(1).B, drawargs.ClipPlane(1).C, drawargs.ClipPlane(1).D };
+	uniforms.ClipPlane2 = { drawargs.ClipPlane(2).A, drawargs.ClipPlane(2).B, drawargs.ClipPlane(2).C, drawargs.ClipPlane(2).D };
+
+	float faceIndex = (float)thread->DrawBatcher.mCurrentBatch->CpuFaceUniforms.size();
+	auto vdest = thread->DrawBatcher.mVertices + thread->DrawBatcher.mNextVertex;
+	memcpy(vdest, drawargs.Vertices(), sizeof(TriVertex) * vcount);
+	for (int i = 0; i < vcount; i++)
+		vdest[i].w = faceIndex;
+
 	thread->DrawBatcher.mNextVertex += run.NumVertices;
+	thread->DrawBatcher.mCurrentBatch->CpuFaceUniforms.push_back(uniforms);
 	thread->DrawBatcher.mCurrentBatch->DrawRuns.push_back(run);
 }
 
@@ -243,32 +251,18 @@ void HardpolyRenderer::RenderBatch(DrawBatch *batch)
 {
 	UpdateFrameUniforms();
 
-	GLint uniformBufferAlignSize = 0;
-	//GLint uniformBufferMinSize = 0;
-	glGetIntegerv(GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT, &uniformBufferAlignSize);
-	//glGetIntegerv(GL_UNIFORM_BLOCK_SIZE_DATA, &uniformBufferMinSize);
-
-	size_t blockSize = (sizeof(FaceUniforms) + uniformBufferAlignSize - 1) / uniformBufferAlignSize * uniformBufferAlignSize;
-
 	if (!batch->FaceUniforms)
 	{
-		batch->FaceUniforms = std::make_shared<GPUUniformBuffer>(nullptr, (int)blockSize * 4 * 1024);
+		batch->FaceUniforms = std::make_shared<GPUUniformBuffer>(nullptr, (int)(DrawBatcher::MaxFaceUniforms * sizeof(FaceUniforms)));
 	}
 
-	static std::vector<uint8_t> uploadBuffer;
-	uploadBuffer.resize(blockSize * 4 * 1024);
-	int uniformCount = 0;
-	for (const auto &run : batch->DrawRuns)
-	{
-		memcpy(uploadBuffer.data() + uniformCount * blockSize, &run.Uniforms, sizeof(FaceUniforms));
-		uniformCount++;
-	}
-	if (uniformCount > 0)
-		batch->FaceUniforms->Upload(uploadBuffer.data(), (int)blockSize * uniformCount);
+	batch->CpuFaceUniforms.resize(DrawBatcher::MaxFaceUniforms); // To do: fix this stupid way of doing it
+	batch->FaceUniforms->Upload(batch->CpuFaceUniforms.data(), (int)(DrawBatcher::MaxFaceUniforms * sizeof(FaceUniforms)));
 
 	mContext->SetVertexArray(batch->VertexArray);
 	mContext->SetProgram(mOpaqueProgram);
 	mContext->SetUniforms(0, mFrameUniforms[mCurrentFrameUniforms]);
+	mContext->SetUniforms(1, batch->FaceUniforms);
 
 	int loc = glGetUniformLocation(mOpaqueProgram->Handle(), "DiffuseTexture");
 	if (loc != -1)
@@ -296,8 +290,6 @@ void HardpolyRenderer::RenderBatch(DrawBatch *batch)
 	int index = 0;
 	for (const auto &run : batch->DrawRuns)
 	{
-		mContext->SetUniforms(1, batch->FaceUniforms, index * blockSize, blockSize);
-
 		//glDepthFunc(run.DepthTest ? GL_LESS : GL_ALWAYS);
 		//glDepthMask(run.WriteDepth ? GL_TRUE : GL_FALSE);
 
@@ -539,7 +531,7 @@ void HardpolyRenderer::CompileShaders()
 					float GlobVis;
 				};
 
-				layout(std140) uniform FaceUniforms
+				struct FaceData
 				{
 					float Light;
 					float AlphaTest;
@@ -551,19 +543,26 @@ void HardpolyRenderer::CompileShaders()
 					vec4 ClipPlane2;
 				};
 
+				layout(std140) uniform FaceUniforms
+				{
+					FaceData Faces[200];
+				};
+
 				in vec4 Position;
 				in vec4 Texcoord;
 				out vec2 UV;
 				out vec3 PositionInView;
+				flat out int FaceIndex;
 
 				void main()
 				{
+					FaceIndex = int(Position.w);
 					vec4 posInView = WorldToView * vec4(Position.xyz, 1.0);
 					PositionInView = posInView.xyz;
 					gl_Position = ViewToProjection * posInView;
-					gl_ClipDistance[0] = dot(ClipPlane0, vec4(Position.xyz, 1.0));
-					gl_ClipDistance[1] = dot(ClipPlane1, vec4(Position.xyz, 1.0));
-					gl_ClipDistance[2] = dot(ClipPlane2, vec4(Position.xyz, 1.0));
+					gl_ClipDistance[0] = dot(Faces[FaceIndex].ClipPlane0, vec4(Position.xyz, 1.0));
+					gl_ClipDistance[1] = dot(Faces[FaceIndex].ClipPlane1, vec4(Position.xyz, 1.0));
+					gl_ClipDistance[2] = dot(Faces[FaceIndex].ClipPlane2, vec4(Position.xyz, 1.0));
 
 					UV = Texcoord.xy;
 				}
@@ -576,7 +575,7 @@ void HardpolyRenderer::CompileShaders()
 					float GlobVis;
 				};
 
-				layout(std140) uniform FaceUniforms
+				struct FaceData
 				{
 					float Light;
 					float AlphaTest;
@@ -588,8 +587,14 @@ void HardpolyRenderer::CompileShaders()
 					vec4 ClipPlane2;
 				};
 
+				layout(std140) uniform FaceUniforms
+				{
+					FaceData Faces[200];
+				};
+
 				in vec2 UV;
 				in vec3 PositionInView;
+				flat in int FaceIndex;
 				out vec4 FragColor;
 				uniform sampler2D DiffuseTexture;
 				uniform sampler2D BasecolormapTexture;
@@ -599,19 +604,19 @@ void HardpolyRenderer::CompileShaders()
 				{
 					float z = -PositionInView.z;
 					float vis = GlobVis / z;
-					float shade = 64.0 - (Light + 12.0) * 32.0/128.0;
+					float shade = 64.0 - (Faces[FaceIndex].Light + 12.0) * 32.0/128.0;
 					float lightscale = clamp((shade - min(24.0, vis)) / 32.0, 0.0, 31.0/32.0);
 					return 1.0 - lightscale;
 				}
 
 				float SoftwareLightPal()
 				{
-					if (Light < 0)
-						return 31 - int((-1.0 - Light) * 31.0 / 255.0 + 0.5);
+					if (Faces[FaceIndex].Light < 0)
+						return 31 - int((-1.0 - Faces[FaceIndex].Light) * 31.0 / 255.0 + 0.5);
 
 					float z = -PositionInView.z;
 					float vis = GlobVis / z;
-					float shade = 64.0 - (Light + 12.0) * 32.0/128.0;
+					float shade = 64.0 - (Faces[FaceIndex].Light + 12.0) * 32.0/128.0;
 					float lightscale = clamp((shade - min(24.0, vis)), 0.0, 31.0);
 					return lightscale;
 				}
@@ -643,7 +648,7 @@ void HardpolyRenderer::CompileShaders()
 
 				int FillColorPal()
 				{
-					return int(FillColor.a);
+					return int(Faces[FaceIndex].FillColor.a);
 				}
 
 				void TextureSampler()
@@ -707,7 +712,7 @@ void HardpolyRenderer::CompileShaders()
 				
 				void main()
 				{
-					switch (Mode)
+					switch (Faces[FaceIndex].Mode)
 					{
 					case 0: TextureSampler(); break;
 					case 1: TranslatedSampler(); break;
@@ -1001,7 +1006,7 @@ void DrawBatcher::DrawBatches(HardpolyRenderer *hardpoly)
 
 void DrawBatcher::GetVertices(int numVertices)
 {
-	if (mNextVertex + numVertices > MaxVertices)
+	if (mNextVertex + numVertices > MaxVertices || (mCurrentBatch && mCurrentBatch->CpuFaceUniforms.size() == MaxFaceUniforms))
 	{
 		Flush();
 	}
@@ -1017,6 +1022,7 @@ void DrawBatcher::GetVertices(int numVertices)
 		mCurrentBatch = mCurrentFrameBatches[mNextBatch++].get();
 		mCurrentBatch->DrawRuns.clear();
 		mCurrentBatch->CpuVertices.resize(MaxVertices);
+		mCurrentBatch->CpuFaceUniforms.clear();// resize(MaxFaceUniforms);
 		mVertices = mCurrentBatch->CpuVertices.data();
 	}
 }
