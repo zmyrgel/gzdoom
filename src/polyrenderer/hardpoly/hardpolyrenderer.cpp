@@ -120,15 +120,12 @@ void HardpolyRenderer::DrawArray(PolyRenderThread *thread, const PolyDrawArgs &d
 		run.PixelsHeight = drawargs.TextureHeight();
 	}
 	run.Translation = drawargs.Translation();
-	run.DrawMode = drawargs.DrawMode();
 	run.BaseColormap = drawargs.BaseColormap();
 	run.BlendMode = drawargs.BlendMode();
 	run.SrcAlpha = drawargs.SrcAlpha();
 	run.DestAlpha = drawargs.DestAlpha();
 	run.DepthTest = drawargs.DepthTest();
 	run.WriteDepth = drawargs.WriteDepth();
-	run.Start = thread->DrawBatcher.mNextVertex;
-	run.NumVertices = vcount;
 
 	FaceUniforms uniforms;
 	uniforms.AlphaTest = 0.5f;
@@ -150,7 +147,50 @@ void HardpolyRenderer::DrawArray(PolyRenderThread *thread, const PolyDrawArgs &d
 	for (int i = 0; i < vcount; i++)
 		vdest[i].w = faceIndex;
 
-	thread->DrawBatcher.mNextVertex += run.NumVertices;
+	int startv = thread->DrawBatcher.mNextVertex;
+	auto &indexBuffer = thread->DrawBatcher.mCurrentBatch->CpuIndexBuffer;
+	run.Start = (int)indexBuffer.size();
+	switch (drawargs.DrawMode())
+	{
+	case PolyDrawMode::Triangles:
+		for (int i = 0; i < vcount; i++)
+			indexBuffer.push_back(startv + i);
+		run.NumVertices = vcount;
+		break;
+	case PolyDrawMode::TriangleStrip:
+		{
+			int i;
+			for (i = 0; i < vcount - 3; i += 2)
+			{
+				indexBuffer.push_back(startv + i);
+				indexBuffer.push_back(startv + i + 1);
+				indexBuffer.push_back(startv + i + 2);
+
+				indexBuffer.push_back(startv + i + 3);
+				indexBuffer.push_back(startv + i + 2);
+				indexBuffer.push_back(startv + i + 1);
+			}
+			if (i < vcount - 2)
+			{
+				indexBuffer.push_back(startv + i);
+				indexBuffer.push_back(startv + i + 1);
+				indexBuffer.push_back(startv + i + 2);
+			}
+			run.NumVertices = MAX(vcount - 2, 0) * 3;
+		}
+		break;
+	case PolyDrawMode::TriangleFan:
+		for (int i = 1; i < vcount - 1; i++)
+		{
+			indexBuffer.push_back(startv);
+			indexBuffer.push_back(startv + i);
+			indexBuffer.push_back(startv + i + 1);
+		}
+		run.NumVertices = MAX(vcount - 2, 0) * 3;
+		break;
+	}
+
+	thread->DrawBatcher.mNextVertex += vcount;
 	thread->DrawBatcher.mCurrentBatch->CpuFaceUniforms.push_back(uniforms);
 	thread->DrawBatcher.mCurrentBatch->DrawRuns.push_back(run);
 }
@@ -260,6 +300,7 @@ void HardpolyRenderer::RenderBatch(DrawBatch *batch)
 	batch->FaceUniforms->Upload(batch->CpuFaceUniforms.data(), (int)(DrawBatcher::MaxFaceUniforms * sizeof(FaceUniforms)));
 
 	mContext->SetVertexArray(batch->VertexArray);
+	mContext->SetIndexBuffer(batch->IndexBuffer);
 	mContext->SetProgram(mOpaqueProgram);
 	mContext->SetUniforms(0, mFrameUniforms[mCurrentFrameUniforms]);
 	mContext->SetUniforms(1, batch->FaceUniforms);
@@ -306,18 +347,7 @@ void HardpolyRenderer::RenderBatch(DrawBatch *batch)
 		if (run.Translation)
 			mContext->SetTexture(2, GetTranslationTexture(run.Translation));
 
-		switch (run.DrawMode)
-		{
-		case PolyDrawMode::Triangles:
-			mContext->Draw(GPUDrawMode::Triangles, run.Start, run.NumVertices);
-			break;
-		case PolyDrawMode::TriangleStrip:
-			mContext->Draw(GPUDrawMode::TriangleStrip, run.Start, run.NumVertices);
-			break;
-		case PolyDrawMode::TriangleFan:
-			mContext->Draw(GPUDrawMode::TriangleFan, run.Start, run.NumVertices);
-			break;
-		}
+		mContext->DrawIndexed(GPUDrawMode::Triangles, run.Start, run.NumVertices);
 
 		index++;
 	}
@@ -336,6 +366,7 @@ void HardpolyRenderer::RenderBatch(DrawBatch *batch)
 
 	mContext->SetUniforms(0, nullptr);
 	mContext->SetUniforms(1, nullptr);
+	mContext->SetIndexBuffer(nullptr);
 	mContext->SetVertexArray(nullptr);
 	mContext->SetProgram(nullptr);
 }
@@ -992,11 +1023,16 @@ void DrawBatcher::DrawBatches(HardpolyRenderer *hardpoly)
 			};
 
 			current->VertexArray = std::make_shared<GPUVertexArray>(attributes);
+			current->IndexBuffer = std::make_shared<GPUIndexBuffer>(nullptr, (int)(MaxIndices * sizeof(int32_t)));
 		}
 
 		TriVertex *gpuVertices = (TriVertex*)current->Vertices->MapWriteOnly();
 		memcpy(gpuVertices, current->CpuVertices.data(), sizeof(TriVertex) * current->CpuVertices.size());
 		current->Vertices->Unmap();
+
+		uint16_t *gpuIndices = (uint16_t*)current->IndexBuffer->MapWriteOnly();
+		memcpy(gpuIndices, current->CpuIndexBuffer.data(), sizeof(uint16_t) * current->CpuIndexBuffer.size());
+		current->IndexBuffer->Unmap();
 
 		hardpoly->RenderBatch(current);
 	}
@@ -1023,6 +1059,7 @@ void DrawBatcher::GetVertices(int numVertices)
 		mCurrentBatch->DrawRuns.clear();
 		mCurrentBatch->CpuVertices.resize(MaxVertices);
 		mCurrentBatch->CpuFaceUniforms.clear();// resize(MaxFaceUniforms);
+		mCurrentBatch->CpuIndexBuffer.clear();
 		mVertices = mCurrentBatch->CpuVertices.data();
 	}
 }
