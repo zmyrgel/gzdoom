@@ -705,6 +705,30 @@ void GPUUniformBuffer::Upload(const void *data, int size)
 	glBindBuffer(GL_UNIFORM_BUFFER, oldHandle);
 }
 
+void *GPUUniformBuffer::MapWriteOnly()
+{
+	GLint oldHandle;
+	glGetIntegerv(GL_UNIFORM_BUFFER_BINDING, &oldHandle);
+
+	glBindBuffer(GL_UNIFORM_BUFFER, mHandle);
+	void *data = glMapBuffer(GL_UNIFORM_BUFFER, GL_WRITE_ONLY);
+
+	glBindBuffer(GL_UNIFORM_BUFFER, oldHandle);
+
+	return data;
+}
+
+void GPUUniformBuffer::Unmap()
+{
+	GLint oldHandle;
+	glGetIntegerv(GL_UNIFORM_BUFFER_BINDING, &oldHandle);
+
+	glBindBuffer(GL_UNIFORM_BUFFER, mHandle);
+	glUnmapBuffer(GL_UNIFORM_BUFFER);
+
+	glBindBuffer(GL_UNIFORM_BUFFER, oldHandle);
+}
+
 GPUUniformBuffer::~GPUUniformBuffer()
 {
 	glDeleteBuffers(1, (GLuint*)&mHandle);

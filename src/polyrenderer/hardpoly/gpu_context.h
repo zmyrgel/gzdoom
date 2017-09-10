@@ -227,6 +227,9 @@ public:
 
 	void Upload(const void *data, int size);
 
+	void *MapWriteOnly();
+	void Unmap();
+
 	int Handle() const { return mHandle; }
 
 private:

@@ -102,7 +102,9 @@ public:
 	int mNextVertex = 0;
 	DrawBatch *mCurrentBatch = nullptr;
 
-	enum { MaxVertices = 16 * 1024, MaxIndices = 3 * 16 * 1024, MaxFaceUniforms = 200 };
+	enum { MaxFaceUniforms = 800 };
+	enum { MaxVertices = MaxFaceUniforms * 4 };
+	enum { MaxIndices = MaxVertices * 3 };
 
 private:
 	std::vector<std::unique_ptr<DrawBatch>> mCurrentFrameBatches;

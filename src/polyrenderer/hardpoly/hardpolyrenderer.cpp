@@ -291,14 +291,6 @@ void HardpolyRenderer::RenderBatch(DrawBatch *batch)
 {
 	UpdateFrameUniforms();
 
-	if (!batch->FaceUniforms)
-	{
-		batch->FaceUniforms = std::make_shared<GPUUniformBuffer>(nullptr, (int)(DrawBatcher::MaxFaceUniforms * sizeof(FaceUniforms)));
-	}
-
-	batch->CpuFaceUniforms.resize(DrawBatcher::MaxFaceUniforms); // To do: fix this stupid way of doing it
-	batch->FaceUniforms->Upload(batch->CpuFaceUniforms.data(), (int)(DrawBatcher::MaxFaceUniforms * sizeof(FaceUniforms)));
-
 	mContext->SetVertexArray(batch->VertexArray);
 	mContext->SetIndexBuffer(batch->IndexBuffer);
 	mContext->SetProgram(mOpaqueProgram);
@@ -328,7 +320,6 @@ void HardpolyRenderer::RenderBatch(DrawBatch *batch)
 	mContext->SetSampler(0, mSamplerNearest);
 	mContext->SetSampler(1, mSamplerNearest);
 	mContext->SetSampler(2, mSamplerNearest);
-	int index = 0;
 	for (const auto &run : batch->DrawRuns)
 	{
 		//glDepthFunc(run.DepthTest ? GL_LESS : GL_ALWAYS);
@@ -348,8 +339,8 @@ void HardpolyRenderer::RenderBatch(DrawBatch *batch)
 			mContext->SetTexture(2, GetTranslationTexture(run.Translation));
 
 		mContext->DrawIndexed(GPUDrawMode::Triangles, run.Start, run.NumVertices);
-
-		index++;
+		//mContext->DrawIndexed(GPUDrawMode::Triangles, 0, batch->DrawRuns.back().Start + batch->DrawRuns.back().NumVertices);
+		//break;
 	}
 	mContext->SetTexture(0, nullptr);
 	mContext->SetTexture(1, nullptr);
@@ -1006,6 +997,8 @@ void DrawBatcher::DrawBatches(HardpolyRenderer *hardpoly)
 {
 	Flush();
 
+	PolyDrawerWaitCycles.Clock();
+
 	for (size_t i = mDrawStart; i < mNextBatch; i++)
 	{
 		DrawBatch *current = mCurrentFrameBatches[i].get();
@@ -1024,6 +1017,7 @@ void DrawBatcher::DrawBatches(HardpolyRenderer *hardpoly)
 
 			current->VertexArray = std::make_shared<GPUVertexArray>(attributes);
 			current->IndexBuffer = std::make_shared<GPUIndexBuffer>(nullptr, (int)(MaxIndices * sizeof(int32_t)));
+			current->FaceUniforms = std::make_shared<GPUUniformBuffer>(nullptr, (int)(DrawBatcher::MaxFaceUniforms * sizeof(FaceUniforms)));
 		}
 
 		TriVertex *gpuVertices = (TriVertex*)current->Vertices->MapWriteOnly();
@@ -1034,10 +1028,18 @@ void DrawBatcher::DrawBatches(HardpolyRenderer *hardpoly)
 		memcpy(gpuIndices, current->CpuIndexBuffer.data(), sizeof(uint16_t) * current->CpuIndexBuffer.size());
 		current->IndexBuffer->Unmap();
 
+		FaceUniforms *gpuUniforms = (FaceUniforms*)current->FaceUniforms->MapWriteOnly();
+		memcpy(gpuUniforms, current->CpuFaceUniforms.data(), sizeof(FaceUniforms) * current->CpuFaceUniforms.size());
+		current->FaceUniforms->Unmap();
+
 		hardpoly->RenderBatch(current);
+		PolyTotalBatches++;
+		PolyTotalTriangles += (current->DrawRuns.back().Start + current->DrawRuns.back().NumVertices) / 3;
 	}
 
 	mDrawStart = mNextBatch;
+
+	PolyDrawerWaitCycles.Unclock();
 }
 
 void DrawBatcher::GetVertices(int numVertices)

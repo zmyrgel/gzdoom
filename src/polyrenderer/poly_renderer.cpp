@@ -104,7 +104,9 @@ void PolyRenderer::RenderView(player_t *player)
 		}
 
 		Threads.MainThread()->FlushDrawQueue();
+		PolyDrawerWaitCycles.Clock();
 		DrawerThreads::WaitForWorkers();
+		PolyDrawerWaitCycles.Unclock();
 	}
 }
 
@@ -138,6 +140,13 @@ void PolyRenderer::RenderViewToCanvas(AActor *actor, DCanvas *canvas, int x, int
 
 void PolyRenderer::RenderActorView(AActor *actor, bool dontmaplines)
 {
+	PolyTotalBatches = 0;
+	PolyTotalTriangles = 0;
+	PolyCullCycles.Reset();
+	PolyOpaqueCycles.Reset();
+	PolyMaskedCycles.Reset();
+	PolyDrawerWaitCycles.Reset();
+
 	NetUpdate();
 	
 	DontMapLines = dontmaplines;
@@ -252,4 +261,16 @@ void PolyRenderer::SetupPerspectiveMatrix()
 
 		Hardpoly->viewToClip = Mat4f::Perspective(fovy, ratio, 5.0f, 65535.0f);
 	}
+}
+
+cycle_t PolyCullCycles, PolyOpaqueCycles, PolyMaskedCycles, PolyDrawerWaitCycles;
+int PolyTotalBatches, PolyTotalTriangles;
+
+ADD_STAT(polyfps)
+{
+	FString out;
+	out.Format("frame=%04.1f ms  cull=%04.1f ms  opaque=%04.1f ms  masked=%04.1f ms  drawers=%04.1f ms",
+		FrameCycles.TimeMS(), PolyCullCycles.TimeMS(), PolyOpaqueCycles.TimeMS(), PolyMaskedCycles.TimeMS(), PolyDrawerWaitCycles.TimeMS());
+	out.AppendFormat("\ntotal batches drawn: %d  total triangles draw: %d", PolyTotalBatches, PolyTotalTriangles);
+	return out;
 }

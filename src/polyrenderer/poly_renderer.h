@@ -34,12 +34,16 @@
 #include "scene/poly_light.h"
 #include "swrenderer/r_memory.h"
 #include "poly_renderthread.h"
+#include "stats.h"
 
 class AActor;
 class DCanvas;
 class DrawerCommandQueue;
 typedef std::shared_ptr<DrawerCommandQueue> DrawerCommandQueuePtr;
 class HardpolyRenderer;
+
+extern cycle_t PolyCullCycles, PolyOpaqueCycles, PolyMaskedCycles, PolyDrawerWaitCycles;
+extern int PolyTotalBatches, PolyTotalTriangles;
 
 class PolyRenderer
 {

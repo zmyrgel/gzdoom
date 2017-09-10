@@ -60,7 +60,9 @@ void RenderPolyScene::Render(int portalDepth)
 
 	SectorPortals.clear();
 	LinePortals.clear();
+	PolyCullCycles.Clock();
 	Cull.CullScene(WorldToClip, PortalPlane);
+	PolyCullCycles.Unclock();
 	RenderSectors();
 	RenderPortals(portalDepth);
 }
@@ -72,7 +74,10 @@ void RenderPolyScene::RenderSectors()
 	int totalcount = (int)Cull.PvsSectors.size();
 	auto subsectors = Cull.PvsSectors.data();
 
-	TranslucentObjects.resize(PolyRenderer::Instance()->Threads.NumThreads());
+	//TranslucentObjects.resize(PolyRenderer::Instance()->Threads.NumThreads());
+	TranslucentObjects.resize(32);
+
+	PolyOpaqueCycles.Clock();
 
 	PolyRenderer::Instance()->Threads.RenderThreadSlices(totalcount, [&](PolyRenderThread *thread)
 	{
@@ -89,6 +94,8 @@ void RenderPolyScene::RenderSectors()
 		const auto &objects = TranslucentObjects[thread->ThreadIndex];
 		TranslucentObjects[0].insert(TranslucentObjects[0].end(), objects.begin(), objects.end());
 	});
+
+	PolyOpaqueCycles.Unclock();
 }
 
 void RenderPolyScene::RenderSubsector(PolyRenderThread *thread, subsector_t *sub, uint32_t subsectorDepth)
@@ -384,6 +391,8 @@ void RenderPolyScene::RenderTranslucent(int portalDepth)
 		}
 	}
 
+	PolyMaskedCycles.Clock();
+
 	std::stable_sort(TranslucentObjects[0].begin(), TranslucentObjects[0].end(), [](auto a, auto b) { return *a < *b; });
 
 	for (auto it = TranslucentObjects[0].rbegin(); it != TranslucentObjects[0].rend(); ++it)
@@ -394,4 +403,6 @@ void RenderPolyScene::RenderTranslucent(int portalDepth)
 	}
 
 	TranslucentObjects[0].clear();
+
+	PolyMaskedCycles.Unclock();
 }
