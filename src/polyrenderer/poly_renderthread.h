@@ -34,7 +34,7 @@ class RenderMemory;
 class PolyRenderThread
 {
 public:
-	PolyRenderThread(bool mainThread = true);
+	PolyRenderThread(int threadIndex);
 	~PolyRenderThread();
 
 	void FlushDrawQueue();
@@ -42,15 +42,11 @@ public:
 	int Start = 0;
 	int End = 0;
 	bool MainThread = false;
+	int ThreadIndex = 0;
 
 	std::unique_ptr<RenderMemory> FrameMemory;
 	DrawerCommandQueuePtr DrawQueue;
 	DrawBatcher DrawBatcher;
-
-	std::vector<PolyTranslucentObject *> TranslucentObjects;
-
-	std::vector<std::unique_ptr<PolyDrawSectorPortal>> SectorPortals;
-	std::vector<std::unique_ptr<PolyDrawLinePortal>> LinePortals;
 
 	// Make sure texture can accessed safely
 	void PrepareTexture(FTexture *texture);
@@ -76,6 +72,7 @@ public:
 	void RenderThreadSlices(int totalcount, std::function<void(PolyRenderThread *)> workerCallback, std::function<void(PolyRenderThread *)> collectCallback);
 
 	PolyRenderThread *MainThread() { return Threads.front().get(); }
+	int NumThreads() const { return (int)Threads.size(); }
 
 	std::vector<std::unique_ptr<PolyRenderThread>> Threads;
 
