@@ -271,6 +271,6 @@ ADD_STAT(polyfps)
 	FString out;
 	out.Format("frame=%04.1f ms  cull=%04.1f ms  opaque=%04.1f ms  masked=%04.1f ms  drawers=%04.1f ms",
 		FrameCycles.TimeMS(), PolyCullCycles.TimeMS(), PolyOpaqueCycles.TimeMS(), PolyMaskedCycles.TimeMS(), PolyDrawerWaitCycles.TimeMS());
-	out.AppendFormat("\ntotal batches drawn: %d  total triangles draw: %d", PolyTotalBatches, PolyTotalTriangles);
+	out.AppendFormat("\ntotal batches drawn: %d  total triangles drawn: %d", PolyTotalBatches, PolyTotalTriangles);
 	return out;
 }
